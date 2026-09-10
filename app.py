@@ -1,5 +1,5 @@
 """
-매매 vs 전세 vs 월세 주거비용 종합 비교 및 의사결정 지원 웹앱
+지영 & 경아의 보금자리 찾아 삼만리 — 매매 vs 전세 vs 월세 주거비용 종합 비교 및 의사결정 지원 웹앱
 Streamlit + Pandas + NumPy + Plotly
 """
 
@@ -8,7 +8,7 @@ import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
-st.set_page_config(page_title="매매 vs 전세 vs 월세 비교", page_icon="🏠", layout="wide")
+st.set_page_config(page_title="지영 & 경아의 보금자리 찾아 삼만리", page_icon="🏠", layout="wide")
 
 
 # ======================================================================================
@@ -380,7 +380,7 @@ def handle_property_switch():
 # ======================================================================================
 # 사이드바 — 공통 입력 (매수자 기준, 모든 물건에 공통 적용)
 # ======================================================================================
-st.title("🏠 매매 vs 전세 vs 월세 주거비용 종합 비교")
+st.title("🏠지영 & 경아의 보금자리 찾아 삼만리")
 st.caption("물건별로 매매·전세·월세 조건을 한 화면에서 동시에 비교하고, 여러 물건을 저장해 종합 비교해 보세요.")
 
 with st.sidebar:
