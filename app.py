@@ -4,10 +4,12 @@ Streamlit + Pandas + NumPy + Plotly
 """
 
 import difflib
+import xml.etree.ElementTree as ET
 
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
+import requests
 import streamlit as st
 
 st.set_page_config(page_title="지영 & 경아의 보금자리 찾아 삼만리", page_icon="🏠", layout="wide")
@@ -50,7 +52,7 @@ def check_password() -> bool:
 
     app_password = get_secret("APP_PASSWORD")
 
-    st.title("🔒 접근 제한")
+    st.title("🐶지영 & 🐯경아만 출입 가능")
     if not app_password:
         st.error(
             "APP_PASSWORD가 설정되지 않았습니다. 관리자는 `.streamlit/secrets.toml`에 "
@@ -59,7 +61,7 @@ def check_password() -> bool:
         return False
 
     entered = st.text_input("비밀번호를 입력하세요", type="password", key="password_input")
-    if st.button("입장"):
+    if st.button("Welcome back 👋"):
         if entered == app_password:
             st.session_state.authenticated = True
             st.rerun()
@@ -374,56 +376,142 @@ def make_sensitivity_heatmap(price_growth_range, loan_rate_range, diff_matrix) -
 
 
 # ======================================================================================
-# 실거래가 조회 — 국토교통부 공공데이터 API 연동 전까지 목업(Mock) 데이터로 동작
-#
-# ⚠️ 아래 3개 함수(search_apartment_matches / fetch_real_trade_trend)는 추후
-# 공공데이터포털 서비스키가 발급되면 실제 API 호출로 교체될 자리입니다.
-# UI 코드는 이 함수들의 반환 형식(리스트 / DataFrame)만 그대로 유지하면 되므로
-# 여기 내부 구현만 바뀌면 하위 UI는 수정할 필요가 없습니다.
+# 실거래가 조회 — 국토교통부 공공데이터포털 API 연동
+# secrets.toml에 DATA_GO_KR_SERVICE_KEY가 설정되어 있으면 실제 API를 호출하고,
+# 없으면 목업(Mock) 데이터로 자동 대체되어 앱이 계속 동작한다.
 # ======================================================================================
-IS_MOCK_REAL_DATA = True  # TODO: 실제 API 연동 완료 시 False로 변경
+DATA_GO_KR_BASE = "https://apis.data.go.kr/1613000"
+TRADE_ENDPOINT = f"{DATA_GO_KR_BASE}/RTMSDataSvcAptTradeDev/getRTMSDataSvcAptTradeDev"
+RENT_ENDPOINT = f"{DATA_GO_KR_BASE}/RTMSDataSvcAptRent/getRTMSDataSvcAptRent"
 
+# 서울특별시 25개 구 법정동코드(앞 5자리). 다른 지역은 '직접 입력'으로 5자리 코드를 넣으면 된다.
+SEOUL_GU_CODES = {
+    "종로구": "11110", "중구": "11140", "용산구": "11170", "성동구": "11200",
+    "광진구": "11215", "동대문구": "11230", "중랑구": "11260", "성북구": "11290",
+    "강북구": "11305", "도봉구": "11320", "노원구": "11350", "은평구": "11380",
+    "서대문구": "11410", "마포구": "11440", "양천구": "11470", "강서구": "11500",
+    "구로구": "11530", "금천구": "11545", "영등포구": "11560", "동작구": "11590",
+    "관악구": "11620", "서초구": "11650", "강남구": "11680", "송파구": "11710",
+    "강동구": "11740",
+}
+CUSTOM_REGION_LABEL = "직접 입력 (5자리 법정동코드)"
+REGION_OPTIONS = [f"서울특별시 {gu}" for gu in SEOUL_GU_CODES] + [CUSTOM_REGION_LABEL]
+
+# API 연동 전까지 오프라인 대체용 목업 DB (서비스키/지역코드가 없을 때만 사용됨)
 MOCK_APT_DB = [
-    {"name": "래미안 강남", "region": "서울 강남구", "base_sale": 135000, "base_jeonse": 95000, "base_wolse_rent": 250},
-    {"name": "래미안 서초", "region": "서울 서초구", "base_sale": 142000, "base_jeonse": 98000, "base_wolse_rent": 260},
-    {"name": "e편한세상 목동", "region": "서울 양천구", "base_sale": 98000, "base_jeonse": 68000, "base_wolse_rent": 180},
-    {"name": "자이 판교", "region": "경기 성남시", "base_sale": 118000, "base_jeonse": 78000, "base_wolse_rent": 200},
-    {"name": "푸르지오 마포", "region": "서울 마포구", "base_sale": 105000, "base_jeonse": 72000, "base_wolse_rent": 190},
-    {"name": "힐스테이트 광교", "region": "경기 수원시", "base_sale": 92000, "base_jeonse": 62000, "base_wolse_rent": 160},
-    {"name": "아크로 리버파크", "region": "서울 서초구", "base_sale": 210000, "base_jeonse": 140000, "base_wolse_rent": 350},
-    {"name": "테스트아파트", "region": "서울 임의구", "base_sale": 60000, "base_jeonse": 42000, "base_wolse_rent": 100},
+    {"name": "래미안 강남", "base_sale": 135000, "base_jeonse": 95000, "base_wolse_rent": 250},
+    {"name": "래미안 서초", "base_sale": 142000, "base_jeonse": 98000, "base_wolse_rent": 260},
+    {"name": "e편한세상 목동", "base_sale": 98000, "base_jeonse": 68000, "base_wolse_rent": 180},
+    {"name": "자이 판교", "base_sale": 118000, "base_jeonse": 78000, "base_wolse_rent": 200},
+    {"name": "푸르지오 마포", "base_sale": 105000, "base_jeonse": 72000, "base_wolse_rent": 190},
+    {"name": "힐스테이트 광교", "base_sale": 92000, "base_jeonse": 62000, "base_wolse_rent": 160},
+    {"name": "아크로 리버파크", "base_sale": 210000, "base_jeonse": 140000, "base_wolse_rent": 350},
+    {"name": "테스트아파트", "base_sale": 60000, "base_jeonse": 42000, "base_wolse_rent": 100},
 ]
 
 
-def search_apartment_matches(query: str, n: int = 5, cutoff: float = 0.35):
+def region_label_to_code(label: str, custom_code: str) -> str:
+    """selectbox에서 고른 지역 라벨을 5자리 법정동코드로 변환"""
+    if label == CUSTOM_REGION_LABEL:
+        return (custom_code or "").strip()
+    gu = label.replace("서울특별시 ", "")
+    return SEOUL_GU_CODES.get(gu, "")
+
+
+def _parse_amount(value):
+    """'110,000' 같은 실거래가 API 금액 문자열을 숫자로 변환"""
+    if value is None:
+        return None
+    value = value.replace(",", "").strip()
+    if not value:
+        return None
+    try:
+        return float(value)
+    except ValueError:
+        return None
+
+
+def _recent_year_months(n: int):
+    """오늘 기준 최근 n개월의 'YYYYMM' 문자열 목록 (과거 -> 최신 순)"""
+    this_month = pd.Timestamp.today().replace(day=1)
+    return [(this_month - pd.DateOffset(months=i)).strftime("%Y%m") for i in range(n - 1, -1, -1)]
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _call_data_go_kr(endpoint: str, service_key: str, lawd_cd: str, deal_ymd: str) -> dict:
     """
-    입력한 아파트 이름과 실거래가 DB 등록명을 매칭한다.
-    TODO(API 연동 시): 국토교통부 '아파트 매매/전월세 실거래가' API에 법정동코드로 조회 후
-    반환되는 아파트명 목록을 대상으로 동일하게 매칭하도록 교체.
+    국토교통부 실거래가 API 원시 호출 + XML 파싱. 1시간 캐시로 동일 (지역, 월) 재조회 시
+    API 호출량을 아낀다. 반환: {"error": str|None, "items": [dict, ...]}
+    """
+    url = (
+        f"{endpoint}?serviceKey={service_key}&LAWD_CD={lawd_cd}&DEAL_YMD={deal_ymd}"
+        f"&numOfRows=1000&pageNo=1"
+    )
+    try:
+        resp = requests.get(url, timeout=10)
+        resp.raise_for_status()
+    except requests.RequestException as e:
+        return {"error": f"API 요청 실패: {e}", "items": []}
+
+    try:
+        root = ET.fromstring(resp.content)
+    except ET.ParseError as e:
+        return {"error": f"응답 파싱 실패: {e}", "items": []}
+
+    result_code_el = root.find(".//resultCode")
+    result_code = result_code_el.text if result_code_el is not None else None
+    if result_code not in ("000", "00"):
+        result_msg_el = root.find(".//resultMsg")
+        msg = result_msg_el.text if result_msg_el is not None else "알 수 없는 오류"
+        return {"error": f"API 오류({result_code}): {msg}", "items": []}
+
+    items = [
+        {child.tag: (child.text or "").strip() for child in item_el}
+        for item_el in root.findall(".//item")
+    ]
+    return {"error": None, "items": items}
+
+
+def search_apartment_matches(query: str, lawd_cd: str = "", n: int = 5, cutoff: float = 0.35):
+    """
+    입력한 아파트 이름과 실거래가 등록명을 매칭한다.
+    서비스키+지역코드가 있으면 최근 3개월 실거래(매매+전월세) 아파트명 목록에서, 없으면 목업 DB에서 매칭.
+    반환: (matches: list[str], error: str|None)
     """
     query = (query or "").strip()
     if not query:
-        return []
-    names = [d["name"] for d in MOCK_APT_DB]
+        return [], None
+
+    service_key = get_secret("DATA_GO_KR_SERVICE_KEY")
+    error = None
+    if service_key and lawd_cd:
+        names_set = set()
+        for ym in _recent_year_months(3):
+            for endpoint in (TRADE_ENDPOINT, RENT_ENDPOINT):
+                result = _call_data_go_kr(endpoint, service_key, lawd_cd, ym)
+                if result["error"] and not error:
+                    error = result["error"]
+                for item in result["items"]:
+                    nm = item.get("aptNm", "").strip()
+                    if nm:
+                        names_set.add(nm)
+        names = sorted(names_set)
+    else:
+        names = [d["name"] for d in MOCK_APT_DB]
+
     close = difflib.get_close_matches(query, names, n=n, cutoff=cutoff)
     substring_matches = [nm for nm in names if query in nm or nm in query]
     ordered = []
     for nm in close + substring_matches:
         if nm not in ordered:
             ordered.append(nm)
-    return ordered[:n]
+    return ordered[:n], error
 
 
-def fetch_real_trade_trend(matched_name: str, months: int = 24) -> pd.DataFrame:
-    """
-    매칭된 아파트의 최근 N개월 매매/전세/월세 실거래가 추이를 반환한다.
-    TODO(API 연동 시): getRTMSDataSvcAptTradeDev(매매 상세) + getRTMSDataSvcAptRent(전월세)
-    API를 계약년월 단위로 반복 호출해 실제 시계열로 교체.
-    """
+def _fetch_mock_trend(matched_name: str, months: int) -> pd.DataFrame:
     apt_record = next((d for d in MOCK_APT_DB if d["name"] == matched_name), None)
     if apt_record is None:
         return pd.DataFrame(columns=["연월", "매매", "전세", "월세"])
-
     seed = abs(hash(matched_name)) % (2**32)
     rng = np.random.default_rng(seed)
     dates = pd.date_range(end=pd.Timestamp.today().replace(day=1), periods=months, freq="MS")
@@ -433,18 +521,66 @@ def fetch_real_trade_trend(matched_name: str, months: int = 24) -> pd.DataFrame:
     return pd.DataFrame({"연월": dates, "매매": sale, "전세": jeonse, "월세": wolse_rent})
 
 
-def make_trend_chart(trend_df: pd.DataFrame, apt_name: str) -> go.Figure:
+def fetch_real_trade_trend(matched_name: str, lawd_cd: str = "", months: int = 24):
+    """
+    매칭된 아파트의 최근 N개월 매매/전세/월세 실거래가 월별 평균 추이.
+    서비스키+지역코드가 있으면 실제 API에서, 없으면 목업 데이터로 생성.
+    반환: (trend_df: DataFrame[연월, 매매, 전세, 월세], error: str|None)
+    """
+    service_key = get_secret("DATA_GO_KR_SERVICE_KEY")
+    if not (service_key and lawd_cd):
+        return _fetch_mock_trend(matched_name, months), None
+
+    error = None
+    rows = []
+    for ym in _recent_year_months(months):
+        trade_result = _call_data_go_kr(TRADE_ENDPOINT, service_key, lawd_cd, ym)
+        rent_result = _call_data_go_kr(RENT_ENDPOINT, service_key, lawd_cd, ym)
+        if not error:
+            error = trade_result["error"] or rent_result["error"]
+
+        sale_prices = [
+            _parse_amount(item.get("dealAmount"))
+            for item in trade_result["items"]
+            if item.get("aptNm", "").strip() == matched_name
+        ]
+        sale_prices = [v for v in sale_prices if v is not None]
+
+        jeonse_deposits, wolse_rents = [], []
+        for item in rent_result["items"]:
+            if item.get("aptNm", "").strip() != matched_name:
+                continue
+            deposit = _parse_amount(item.get("deposit"))
+            monthly = _parse_amount(item.get("monthlyRent"))
+            if monthly and monthly > 0:
+                wolse_rents.append(monthly)
+            elif deposit is not None:
+                jeonse_deposits.append(deposit)
+
+        rows.append({
+            "연월": pd.Timestamp(ym + "01"),
+            "매매": np.mean(sale_prices) if sale_prices else np.nan,
+            "전세": np.mean(jeonse_deposits) if jeonse_deposits else np.nan,
+            "월세": np.mean(wolse_rents) if wolse_rents else np.nan,
+        })
+    return pd.DataFrame(rows), error
+
+
+def make_trend_chart(trend_df: pd.DataFrame, apt_name: str, is_mock: bool) -> go.Figure:
     fig = go.Figure()
-    fig.add_scatter(x=trend_df["연월"], y=trend_df["매매"], mode="lines+markers", name="매매(만원)")
-    fig.add_scatter(x=trend_df["연월"], y=trend_df["전세"], mode="lines+markers", name="전세(만원)")
+    fig.add_scatter(x=trend_df["연월"], y=trend_df["매매"], mode="lines+markers", name="매매(만원)", connectgaps=True)
+    fig.add_scatter(x=trend_df["연월"], y=trend_df["전세"], mode="lines+markers", name="전세(만원)", connectgaps=True)
     fig.add_scatter(
-        x=trend_df["연월"], y=trend_df["월세"], mode="lines+markers", name="월세(만원, 우측축)", yaxis="y2",
+        x=trend_df["연월"], y=trend_df["월세"], mode="lines+markers", name="월세(만원, 우측축)",
+        yaxis="y2", connectgaps=True,
     )
     fig.update_layout(
-        title=f"{apt_name} 최근 {len(trend_df)}개월 매매·전세·월세 실거래가 추이" + (" (Mock 데이터)" if IS_MOCK_REAL_DATA else ""),
+        title=f"{apt_name} 최근 {len(trend_df)}개월 매매·전세·월세 실거래가 추이" + (" (Mock 데이터)" if is_mock else ""),
         xaxis_title="계약년월", yaxis_title="매매·전세 보증금(만원)",
         yaxis2=dict(title="월세(만원)", overlaying="y", side="right"),
-        height=420, margin=dict(t=60, b=10), legend=dict(orientation="h", y=1.15),
+        height=460,
+        margin=dict(t=60, b=80),
+        legend=dict(orientation="h", yanchor="top", y=-0.22, xanchor="center", x=0.5),
     )
     return fig
 
@@ -457,6 +593,8 @@ NEW_PROPERTY_ID = "__NEW__"  # '새 물건 추가' 상태를 나타내는 센티
 DEFAULT_FORM_VALUES = {
     "f_apt_name": "",
     "f_dong": "",
+    "f_region_label": "서울특별시 강남구",
+    "f_custom_lawd_cd": "",
     "f_size_pyeong": 25.0,
     "f_note": "",
     "f_monthly_mgmt_fee": 15,
@@ -484,6 +622,8 @@ def load_property_into_form(pid: str):
     prop = st.session_state.properties[pid]
     st.session_state.f_apt_name = prop["name"]
     st.session_state.f_dong = prop.get("dong", "")
+    st.session_state.f_region_label = prop.get("region_label", DEFAULT_FORM_VALUES["f_region_label"])
+    st.session_state.f_custom_lawd_cd = prop.get("custom_lawd_cd", "")
     st.session_state.f_size_pyeong = prop["size_pyeong"]
     st.session_state.f_note = prop["note"]
     st.session_state.f_monthly_mgmt_fee = prop.get("monthly_mgmt_fee", DEFAULT_FORM_VALUES["f_monthly_mgmt_fee"])
@@ -612,17 +752,38 @@ with tab_analyze:
 
     st.divider()
     st.subheader("🔍 실거래가 매칭 & 최근 시세 추이")
-    if IS_MOCK_REAL_DATA:
+
+    service_key_configured = bool(get_secret("DATA_GO_KR_SERVICE_KEY"))
+    if not service_key_configured:
         st.info(
             "⚠️ 아직 공공데이터 API 키가 연동되지 않아 임시 목업(Mock) 데이터로 동작합니다. "
-            "API 키가 발급되면 국토교통부 실거래가로 자동 교체됩니다."
+            "`secrets.toml`에 DATA_GO_KR_SERVICE_KEY를 설정하면 국토교통부 실거래가로 자동 교체됩니다."
         )
+
+    rcol1, rcol2 = st.columns([2, 1.2])
+    with rcol1:
+        st.selectbox("지역 (시/군/구)", options=REGION_OPTIONS, key="f_region_label")
+    with rcol2:
+        if st.session_state.f_region_label == CUSTOM_REGION_LABEL:
+            st.text_input(
+                "법정동코드 (5자리)", key="f_custom_lawd_cd", max_chars=5, placeholder="예: 41135",
+            )
+        else:
+            st.caption("법정동코드")
+            st.caption(f"`{region_label_to_code(st.session_state.f_region_label, '')}`")
+
+    lawd_cd = region_label_to_code(st.session_state.f_region_label, st.session_state.f_custom_lawd_cd)
+    using_real_data = service_key_configured and bool(lawd_cd)
 
     apt_query = st.session_state.f_apt_name.strip()
     if not apt_query:
         st.caption("💡 위 '아파트 이름'을 입력하면 실거래가 DB에서 유사한 물건을 자동으로 찾아드립니다.")
+    elif service_key_configured and not lawd_cd:
+        st.warning("지역(시/군/구)을 선택하거나 법정동코드를 입력해야 실거래가를 조회할 수 있습니다.")
     else:
-        matches = search_apartment_matches(apt_query)
+        matches, match_error = search_apartment_matches(apt_query, lawd_cd)
+        if match_error:
+            st.warning(f"실거래가 API 조회 중 문제가 발생했습니다: {match_error}")
         if not matches:
             st.warning(f"'{apt_query}'와(과) 일치하는 실거래가 등록 아파트를 찾지 못했습니다. 이름을 다르게 입력해 보세요.")
             st.session_state.pop("matched_apt_name", None)
@@ -632,28 +793,43 @@ with tab_analyze:
             matched_name = st.selectbox(
                 "실거래가 DB에서 매칭된 아파트를 선택하세요", options=matches, key="matched_apt_name",
             )
-            matched_region = next(d["region"] for d in MOCK_APT_DB if d["name"] == matched_name)
-            st.caption(f"📍 매칭된 물건: {matched_name} ({matched_region})")
+            st.caption(f"📍 매칭된 물건: {matched_name} ({st.session_state.f_region_label})")
 
-            trend_df = fetch_real_trade_trend(matched_name)
-            st.plotly_chart(make_trend_chart(trend_df, matched_name), use_container_width=True)
+            trend_df, trend_error = fetch_real_trade_trend(matched_name, lawd_cd)
+            if trend_error:
+                st.warning(f"실거래가 추이 조회 중 문제가 발생했습니다: {trend_error}")
 
-            st.markdown("**📊 내 시뮬레이션 입력값 vs 실거래가 DB 최근값 비교**")
-            latest = trend_df.iloc[-1]
-            mc1, mc2, mc3 = st.columns(3)
-            mc1.metric(
-                "매매가 (내 입력)", fmt_money(st.session_state.f_sale_price),
-                delta=fmt_money(st.session_state.f_sale_price - latest["매매"]),
-            )
-            mc2.metric(
-                "전세보증금 (내 입력)", fmt_money(st.session_state.f_jeonse_deposit),
-                delta=fmt_money(st.session_state.f_jeonse_deposit - latest["전세"]),
-            )
-            mc3.metric(
-                "월세액 (내 입력)", fmt_money(st.session_state.f_wolse_monthly),
-                delta=fmt_money(st.session_state.f_wolse_monthly - latest["월세"]),
-            )
-            st.caption("델타(▲/▼)는 '내가 입력한 시뮬레이션 값 − 실거래가 DB 최근값' 기준입니다.")
+            if trend_df.empty:
+                st.info("표시할 실거래가 데이터가 없습니다.")
+            else:
+                st.plotly_chart(
+                    make_trend_chart(trend_df, matched_name, is_mock=not using_real_data),
+                    use_container_width=True,
+                )
+
+                def _last_valid(series):
+                    s = series.dropna()
+                    return s.iloc[-1] if not s.empty else None
+
+                latest_sale = _last_valid(trend_df["매매"])
+                latest_jeonse = _last_valid(trend_df["전세"])
+                latest_wolse = _last_valid(trend_df["월세"])
+
+                st.markdown("**📊 내 시뮬레이션 입력값 vs 실거래가 최근값 비교**")
+                mc1, mc2, mc3 = st.columns(3)
+                mc1.metric(
+                    "매매가 (내 입력)", fmt_money(st.session_state.f_sale_price),
+                    delta=None if latest_sale is None else fmt_money(st.session_state.f_sale_price - latest_sale),
+                )
+                mc2.metric(
+                    "전세보증금 (내 입력)", fmt_money(st.session_state.f_jeonse_deposit),
+                    delta=None if latest_jeonse is None else fmt_money(st.session_state.f_jeonse_deposit - latest_jeonse),
+                )
+                mc3.metric(
+                    "월세액 (내 입력)", fmt_money(st.session_state.f_wolse_monthly),
+                    delta=None if latest_wolse is None else fmt_money(st.session_state.f_wolse_monthly - latest_wolse),
+                )
+                st.caption("델타(▲/▼)는 '내가 입력한 시뮬레이션 값 − 실거래가 최근값' 기준입니다. 실거래가 없는 달은 빈 값으로 표시됩니다.")
 
     st.divider()
 
@@ -679,6 +855,8 @@ with tab_analyze:
             st.session_state.properties[new_pid] = {
                 "name": name,
                 "dong": dong,
+                "region_label": st.session_state.f_region_label,
+                "custom_lawd_cd": st.session_state.f_custom_lawd_cd,
                 "size_pyeong": st.session_state.f_size_pyeong,
                 "note": st.session_state.f_note,
                 "monthly_mgmt_fee": st.session_state.f_monthly_mgmt_fee,
