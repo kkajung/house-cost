@@ -3,8 +3,10 @@
 Streamlit + Pandas + NumPy + Plotly
 """
 
+import concurrent.futures
 import difflib
 import xml.etree.ElementTree as ET
+from datetime import datetime
 
 import numpy as np
 import pandas as pd
@@ -360,6 +362,39 @@ def compute_sensitivity(g: dict, p: dict, j: dict):
     return price_growth_range, loan_rate_range, diff_matrix
 
 
+def compute_option_crossovers(g: dict, p: dict, j: dict, w: dict, max_years: float = 40.0, step: float = 0.5):
+    """
+    거주(보유) 기간을 늘려가며 매매/전세/월세 중 실질 순비용이 가장 낮은 옵션이 몇 년째에 바뀌는지 계산한다.
+    전월세 계약은 보통 2~4년 단위라 사용자가 설정한 거주기간은 짧게 잡히기 쉬운데,
+    매매는 장기로 갈수록 유리해지는 경우가 많아 "이대로 오래 살면 결과가 달라지는지" 보여주기 위함.
+    반환: (timeline: list[(period, best_option)], transitions: list[(period, new_best_option)])
+    """
+    periods = np.arange(step, max_years + step / 2, step)
+    timeline = []
+    transitions = []
+    prev_best = None
+    for period in periods:
+        g_p = dict(g, target_period=float(period))
+        pn, _, _ = calc_purchase(g_p, p)
+        jn, _, _ = calc_jeonse(g_p, j)
+        wn, _, _ = calc_wolse(g_p, w)
+        costs = {"매매": pn, "전세": jn, "월세": wn}
+        best = min(costs, key=costs.get)
+        timeline.append((float(period), best))
+        if prev_best is not None and best != prev_best:
+            transitions.append((float(period), best))
+        prev_best = best
+    return timeline, transitions
+
+
+def format_crossover_message(transitions: list, current_best: str, max_years: float) -> str:
+    """손익분기 전환 시점을 사람이 읽을 문장으로 변환"""
+    if not transitions:
+        return f"📐 보유기간을 최대 {max_years:.0f}년까지 늘려봐도 **{current_best}**가 계속 유리한 것으로 예상됩니다 (이 조건에서는 순위 역전이 없습니다)."
+    parts = [f"약 **{period:.1f}년차부터 {new_best}**가 더 유리" for period, new_best in transitions]
+    return "📐 보유기간이 길어지면 " + " → ".join(parts) + "해질 것으로 예상됩니다. (다른 조건은 현재 입력값 그대로 가정)"
+
+
 def make_sensitivity_heatmap(price_growth_range, loan_rate_range, diff_matrix) -> go.Figure:
     fig = go.Figure(
         data=go.Heatmap(
@@ -550,6 +585,18 @@ def _recent_year_months(n: int):
     return [(this_month - pd.DateOffset(months=i)).strftime("%Y%m") for i in range(n - 1, -1, -1)]
 
 
+REAL_ESTATE_DATA_START = (2006, 1)  # 아파트 매매/전월세 실거래가 공개 시작 시점(국토교통부)
+
+
+def _all_year_months_since(year: int, month: int):
+    """지정한 연-월부터 이번 달까지의 'YYYYMM' 문자열 목록 (과거 -> 최신 순)"""
+    start = pd.Timestamp(year=year, month=month, day=1)
+    end = pd.Timestamp.today().replace(day=1)
+    if start > end:
+        return [end.strftime("%Y%m")]
+    return [d.strftime("%Y%m") for d in pd.date_range(start=start, end=end, freq="MS")]
+
+
 @st.cache_data(ttl=3600, show_spinner=False)
 def _call_data_go_kr(endpoint: str, service_key: str, lawd_cd: str, deal_ymd: str) -> dict:
     """
@@ -588,7 +635,8 @@ def _call_data_go_kr(endpoint: str, service_key: str, lawd_cd: str, deal_ymd: st
 def search_apartment_matches(query: str, lawd_cd: str = "", n: int = 5, cutoff: float = 0.35):
     """
     입력한 아파트 이름과 실거래가 등록명을 매칭한다.
-    서비스키+지역코드가 있으면 최근 3개월 실거래(매매+전월세) 아파트명 목록에서, 없으면 목업 DB에서 매칭.
+    서비스키+지역코드가 있으면 최근 12개월 실거래(매매+전월세) 아파트명 목록에서, 없으면 목업 DB에서 매칭.
+    (구축 아파트는 거래가 뜸할 수 있어 3개월보다 넉넉하게 잡는다.)
     반환: (matches: list[str], error: str|None)
     """
     query = (query or "").strip()
@@ -599,7 +647,7 @@ def search_apartment_matches(query: str, lawd_cd: str = "", n: int = 5, cutoff: 
     error = None
     if service_key and lawd_cd:
         names_set = set()
-        for ym in _recent_year_months(3):
+        for ym in _recent_year_months(12):
             for endpoint in (TRADE_ENDPOINT, RENT_ENDPOINT):
                 result = _call_data_go_kr(endpoint, service_key, lawd_cd, ym)
                 if result["error"] and not error:
@@ -634,23 +682,24 @@ def _fetch_mock_trend(matched_name: str, months: int) -> pd.DataFrame:
     return pd.DataFrame({"연월": dates, "매매": sale, "전세": jeonse, "월세": wolse_rent})
 
 
-def fetch_real_trade_trend(matched_name: str, lawd_cd: str = "", months: int = 24):
+def fetch_real_trade_trend(matched_name: str, lawd_cd: str, year_months: list):
     """
-    매칭된 아파트의 최근 N개월 매매/전세/월세 실거래가 월별 평균 추이.
-    서비스키+지역코드가 있으면 실제 API에서, 없으면 목업 데이터로 생성.
+    매칭된 아파트의 매매/전세/월세 월별 평균 추이를 year_months(조회할 'YYYYMM' 목록)에 대해 계산.
+    국토교통부 API는 동시 요청 처리량 자체가 제한적이라 기간이 길수록(예: 2006년 전체) 오래 걸리므로,
+    호출측(UI)이 조회 기간을 선택해 넘긴다. 서비스키+지역코드가 없으면 목업 데이터로 대체.
     반환: (trend_df: DataFrame[연월, 매매, 전세, 월세], error: str|None)
     """
     service_key = get_secret("DATA_GO_KR_SERVICE_KEY")
     if not (service_key and lawd_cd):
-        return _fetch_mock_trend(matched_name, months), None
+        return _fetch_mock_trend(matched_name, len(year_months) or 24), None
 
-    error = None
-    rows = []
-    for ym in _recent_year_months(months):
+    error_holder = {"msg": None}
+
+    def _fetch_one_month(ym: str) -> dict:
         trade_result = _call_data_go_kr(TRADE_ENDPOINT, service_key, lawd_cd, ym)
         rent_result = _call_data_go_kr(RENT_ENDPOINT, service_key, lawd_cd, ym)
-        if not error:
-            error = trade_result["error"] or rent_result["error"]
+        if not error_holder["msg"]:
+            error_holder["msg"] = trade_result["error"] or rent_result["error"]
 
         sale_prices = [
             _parse_amount(item.get("dealAmount"))
@@ -670,13 +719,22 @@ def fetch_real_trade_trend(matched_name: str, lawd_cd: str = "", months: int = 2
             elif deposit is not None:
                 jeonse_deposits.append(deposit)
 
-        rows.append({
+        return {
             "연월": pd.Timestamp(ym + "01"),
             "매매": np.mean(sale_prices) if sale_prices else np.nan,
             "전세": np.mean(jeonse_deposits) if jeonse_deposits else np.nan,
             "월세": np.mean(wolse_rents) if wolse_rents else np.nan,
-        })
-    return pd.DataFrame(rows), error
+        }
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=16) as executor:
+        rows = list(executor.map(_fetch_one_month, year_months))
+
+    trend_df = pd.DataFrame(rows)
+    # 건물이 아직 없던(또는 거래가 전혀 없던) 앞쪽 구간은 잘라내고, 실제 거래가 시작된 시점부터 보여준다.
+    has_data = trend_df[["매매", "전세", "월세"]].notna().any(axis=1)
+    if has_data.any():
+        trend_df = trend_df.loc[has_data.idxmax():].reset_index(drop=True)
+    return trend_df, error_holder["msg"]
 
 
 def make_trend_chart(trend_df: pd.DataFrame, apt_name: str, is_mock: bool) -> go.Figure:
@@ -687,8 +745,12 @@ def make_trend_chart(trend_df: pd.DataFrame, apt_name: str, is_mock: bool) -> go
         x=trend_df["연월"], y=trend_df["월세"], mode="lines+markers", name="월세(만원, 우측축)",
         yaxis="y2", connectgaps=True,
     )
+    if len(trend_df) > 0:
+        period_label = f"{trend_df['연월'].min():%Y.%m} ~ {trend_df['연월'].max():%Y.%m}"
+    else:
+        period_label = ""
     fig.update_layout(
-        title=f"{apt_name} 최근 {len(trend_df)}개월 매매·전세·월세 실거래가 추이" + (" (Mock 데이터)" if is_mock else ""),
+        title=f"{apt_name} 매매·전세·월세 실거래가 추이 ({period_label})" + (" (Mock 데이터)" if is_mock else ""),
         xaxis_title="계약년월", yaxis_title="매매·전세 보증금(만원)",
         yaxis2=dict(title="월세(만원)", overlaying="y", side="right"),
         height=460,
@@ -709,13 +771,20 @@ PROPERTY_COLUMNS = [
     "pid", "name", "dong", "region_label", "custom_lawd_cd", "size_pyeong", "note",
     "monthly_mgmt_fee", "sale_price", "price_growth_rate", "mortgage_rate", "renovation_cost",
     "jeonse_deposit", "jeonse_loan_rate", "wolse_deposit", "wolse_monthly", "wolse_loan_rate",
+    "saved_at",
+]
+# 저장할 때마다 한 줄씩 누적되는 이력 로그 (덮어쓰지 않음) — 쌓이면 나만의 가격 추이 그래프가 된다.
+HISTORY_COLUMNS = [
+    "saved_at", "pid", "name", "dong", "size_pyeong",
+    "sale_price", "price_growth_rate", "mortgage_rate",
+    "jeonse_deposit", "jeonse_loan_rate", "wolse_deposit", "wolse_monthly", "wolse_loan_rate",
 ]
 _GSHEET_DEBUG = {"error": None}  # 마지막 연결 실패 사유를 UI에 노출해 진단을 돕는다 (민감정보 아님)
 
 
 @st.cache_resource(show_spinner=False)
-def _get_gsheet_worksheet():
-    """Google Sheets 연결 (연결 객체는 세션 동안 재사용). 시크릿이 없거나 연결 실패 시 None."""
+def _open_gsheet():
+    """서비스 계정으로 스프레드시트 자체를 연다 (properties/history 워크시트가 여기서 파생됨)."""
     sa_info = get_secret("gcp_service_account")
     sheet_id = get_secret("GSHEET_ID")
     if not sa_info or not sheet_id:
@@ -728,25 +797,46 @@ def _get_gsheet_worksheet():
         creds = Credentials.from_service_account_info(dict(sa_info), scopes=GSHEET_SCOPES)
         client = gspread.authorize(creds)
         sh = client.open_by_key(sheet_id)
-        try:
-            ws = sh.worksheet("properties")
-        except gspread.WorksheetNotFound:
-            ws = sh.add_worksheet(title="properties", rows=1000, cols=len(PROPERTY_COLUMNS))
-            ws.append_row(PROPERTY_COLUMNS)
         _GSHEET_DEBUG["error"] = None
+        return sh
+    except Exception as e:
+        _GSHEET_DEBUG["error"] = f"{type(e).__name__}: {e}"
+        return None
+
+
+@st.cache_resource(show_spinner=False)
+def _get_or_create_worksheet(sheet_name: str, columns: tuple):
+    sh = _open_gsheet()
+    if sh is None:
+        return None
+    import gspread
+
+    try:
+        return sh.worksheet(sheet_name)
+    except gspread.WorksheetNotFound:
+        ws = sh.add_worksheet(title=sheet_name, rows=2000, cols=len(columns))
+        ws.append_row(list(columns))
         return ws
     except Exception as e:
         _GSHEET_DEBUG["error"] = f"{type(e).__name__}: {e}"
         return None
 
 
+def _get_properties_worksheet():
+    return _get_or_create_worksheet("properties", tuple(PROPERTY_COLUMNS))
+
+
+def _get_history_worksheet():
+    return _get_or_create_worksheet("history", tuple(HISTORY_COLUMNS))
+
+
 def gsheet_enabled() -> bool:
-    return _get_gsheet_worksheet() is not None
+    return _open_gsheet() is not None
 
 
 def load_properties_from_gsheet() -> dict:
     """Google Sheets의 모든 물건 행을 읽어 {pid: property_dict} 형태로 반환"""
-    ws = _get_gsheet_worksheet()
+    ws = _get_properties_worksheet()
     if ws is None:
         return {}
     try:
@@ -784,13 +874,14 @@ def load_properties_from_gsheet() -> dict:
             "wolse_deposit": _num(row.get("wolse_deposit"), int, 0),
             "wolse_monthly": _num(row.get("wolse_monthly"), int, 0),
             "wolse_loan_rate": _num(row.get("wolse_loan_rate"), float, 0.0),
+            "saved_at": str(row.get("saved_at", "")),
         }
     return props
 
 
 def save_property_to_gsheet(pid: str, prop: dict) -> None:
     """물건 하나를 Google Sheets에 upsert(있으면 갱신, 없으면 추가)"""
-    ws = _get_gsheet_worksheet()
+    ws = _get_properties_worksheet()
     if ws is None:
         return
     import gspread
@@ -813,7 +904,7 @@ def save_property_to_gsheet(pid: str, prop: dict) -> None:
 
 
 def delete_property_from_gsheet(pid: str) -> None:
-    ws = _get_gsheet_worksheet()
+    ws = _get_properties_worksheet()
     if ws is None:
         return
     import gspread
@@ -828,6 +919,57 @@ def delete_property_from_gsheet(pid: str) -> None:
         ws.delete_rows(cell.row)
     except Exception:
         pass
+
+
+def append_history_to_gsheet(pid: str, prop: dict, saved_at: str) -> None:
+    """저장할 때마다 덮어쓰지 않고 한 줄씩 쌓는 이력 로그. 누적되면 내 입력값의 시세 추이가 된다."""
+    ws = _get_history_worksheet()
+    if ws is None:
+        return
+    row_values = [saved_at, pid] + [str(prop.get(col, "")) for col in HISTORY_COLUMNS[2:]]
+    try:
+        ws.append_row(row_values)
+    except Exception:
+        pass
+
+
+def load_history_from_gsheet(pid: str) -> pd.DataFrame:
+    """특정 물건(pid)의 누적 입력 이력을 시간순 DataFrame으로 반환"""
+    ws = _get_history_worksheet()
+    empty = pd.DataFrame(columns=HISTORY_COLUMNS)
+    if ws is None:
+        return empty
+    try:
+        records = ws.get_all_records()
+    except Exception:
+        return empty
+    rows = [r for r in records if str(r.get("pid", "")) == pid]
+    if not rows:
+        return empty
+    df = pd.DataFrame(rows)
+    df["saved_at"] = pd.to_datetime(df["saved_at"], errors="coerce")
+    for col in ["size_pyeong", "sale_price", "price_growth_rate", "mortgage_rate",
+                "jeonse_deposit", "jeonse_loan_rate", "wolse_deposit", "wolse_monthly", "wolse_loan_rate"]:
+        df[col] = pd.to_numeric(df[col], errors="coerce")
+    return df.dropna(subset=["saved_at"]).sort_values("saved_at").reset_index(drop=True)
+
+
+def make_my_history_chart(history_df: pd.DataFrame, apt_name: str) -> go.Figure:
+    fig = go.Figure()
+    fig.add_scatter(x=history_df["saved_at"], y=history_df["sale_price"], mode="lines+markers", name="매매가(내 입력, 만원)")
+    fig.add_scatter(x=history_df["saved_at"], y=history_df["jeonse_deposit"], mode="lines+markers", name="전세보증금(내 입력, 만원)")
+    fig.add_scatter(
+        x=history_df["saved_at"], y=history_df["wolse_monthly"], mode="lines+markers",
+        name="월세액(내 입력, 만원, 우측축)", yaxis="y2",
+    )
+    fig.update_layout(
+        title=f"{apt_name} — 내가 저장할 때마다 기록된 입력값 변화 (누적 {len(history_df)}회)",
+        xaxis_title="저장 시각", yaxis_title="매매가·전세보증금(만원)",
+        yaxis2=dict(title="월세(만원)", overlaying="y", side="right"),
+        height=420, margin=dict(t=60, b=80),
+        legend=dict(orientation="h", yanchor="top", y=-0.22, xanchor="center", x=0.5),
+    )
+    return fig
 
 
 # ======================================================================================
@@ -1016,6 +1158,24 @@ with tab_analyze:
         money_hint(st.session_state.f_monthly_mgmt_fee)
     st.text_input("비고", key="f_note", placeholder="예: 역세권, 로열층, 남향 등")
 
+    _current_prop = st.session_state.properties.get(st.session_state.selected_property_id)
+    if _current_prop and _current_prop.get("saved_at"):
+        st.caption(f"🕒 마지막 저장 일시: {_current_prop['saved_at']}")
+
+    if gsheet_enabled() and st.session_state.selected_property_id != NEW_PROPERTY_ID:
+        _history_df = load_history_from_gsheet(st.session_state.selected_property_id)
+        if len(_history_df) >= 1:
+            st.divider()
+            st.subheader("📈 내가 기록한 시세 변화 (누적 이력)")
+            st.caption("저장할 때마다 값을 덮어쓰지 않고 한 줄씩 쌓입니다 — 같은 물건을 주기적으로 다시 저장하면 나만의 시세 추이가 됩니다.")
+            if len(_history_df) == 1:
+                st.info("아직 저장 기록이 1건뿐이라 추이를 그리기엔 이릅니다. 나중에 다시 저장하면 그래프가 나타납니다.")
+            else:
+                st.plotly_chart(
+                    make_my_history_chart(_history_df, _current_prop["name"] if _current_prop else st.session_state.selected_property_id),
+                    use_container_width=True,
+                )
+
     st.divider()
     st.subheader("🔍 실거래가 매칭 & 최근 시세 추이")
 
@@ -1061,7 +1221,21 @@ with tab_analyze:
             )
             st.caption(f"📍 매칭된 물건: {matched_name} ({st.session_state.f_region_label})")
 
-            trend_df, trend_error = fetch_real_trade_trend(matched_name, lawd_cd)
+            range_choice = st.radio(
+                "조회 기간", ["최근 5년 (빠름)", "최근 10년", "전체 (2006년~, 오래된 아파트용·느림)"],
+                horizontal=True, key="trend_range_choice",
+            )
+            if using_real_data and range_choice.startswith("전체"):
+                st.caption("⏳ 정부 API 자체의 동시 요청 제한 때문에 전체 기간 조회는 지역당 최초 1회 약 2~3분 걸릴 수 있습니다. (같은 지역은 이후 1시간 동안 캐시되어 빨라집니다)")
+            if range_choice.startswith("최근 5"):
+                year_months = _recent_year_months(60)
+            elif range_choice.startswith("최근 10"):
+                year_months = _recent_year_months(120)
+            else:
+                year_months = _all_year_months_since(*REAL_ESTATE_DATA_START)
+
+            with st.spinner(f"'{matched_name}' 실거래가 조회 중... ({range_choice})"):
+                trend_df, trend_error = fetch_real_trade_trend(matched_name, lawd_cd, year_months)
             if trend_error:
                 st.warning(f"실거래가 추이 조회 중 문제가 발생했습니다: {trend_error}")
 
@@ -1120,6 +1294,7 @@ with tab_analyze:
                 del st.session_state.properties[prev_id]  # 이름/동 변경 시 기존 항목 정리
                 if gsheet_enabled():
                     delete_property_from_gsheet(prev_id)
+            saved_at = datetime.now().strftime("%Y-%m-%d %H:%M")
             st.session_state.properties[new_pid] = {
                 "name": name,
                 "dong": dong,
@@ -1137,13 +1312,18 @@ with tab_analyze:
                 "wolse_deposit": st.session_state.f_wolse_deposit,
                 "wolse_monthly": st.session_state.f_wolse_monthly,
                 "wolse_loan_rate": st.session_state.f_wolse_loan_rate,
+                "saved_at": saved_at,
             }
             st.session_state.pending_select_id = new_pid
             if gsheet_enabled():
                 save_property_to_gsheet(new_pid, st.session_state.properties[new_pid])
-                st.success(f"'{new_pid}' 물건이 저장되고 공유 저장소에 동기화되었습니다. 다른 기기에서도 바로 확인할 수 있습니다.")
+                append_history_to_gsheet(new_pid, st.session_state.properties[new_pid], saved_at)
+                st.success(
+                    f"'{new_pid}' 물건이 저장되고 공유 저장소에 동기화되었습니다 ({saved_at}). "
+                    "누적 입력 이력은 아래 '📈 내가 기록한 시세 변화'에서 확인할 수 있습니다."
+                )
             else:
-                st.success(f"'{new_pid}' 물건이 저장되었습니다. (공유 저장소 미연동 — 이 브라우저에서만 보입니다)")
+                st.success(f"'{new_pid}' 물건이 저장되었습니다 ({saved_at}). (공유 저장소 미연동 — 이 브라우저에서만 보이고 이력도 쌓이지 않습니다)")
             st.rerun()
 
     if delete_clicked and st.session_state.selected_property_id != NEW_PROPERTY_ID:
@@ -1231,6 +1411,14 @@ with tab_analyze:
     st.success(
         f"✅ [{apt_label}] 최적 선택: {best_option} — 거주 예정기간 {target_period:.1f}년 기준 실질 순비용이 가장 낮습니다. "
         f"(차선 대비 약 {fmt_money(saving)} 절감)"
+    )
+
+    _crossover_max_years = 40.0
+    _timeline, _transitions = compute_option_crossovers(g_calc, p_inputs, j_inputs, w_inputs, max_years=_crossover_max_years)
+    st.info(format_crossover_message(_transitions, best_option, _crossover_max_years))
+    st.caption(
+        "💡 전월세는 보통 2~4년 단위 계약이라 거주기간을 짧게 잡기 쉬운데, "
+        "실제로 그 집(또는 그 동네)에 얼마나 오래 살 것 같은지를 기준으로 위 전환 시점과 비교해보세요."
     )
 
     st.subheader("💧 자금 흐름 워터폴 차트")
@@ -1341,6 +1529,7 @@ with tab_compare:
             rows.append({
                 "물건명": prop["name"], "동": prop.get("dong", ""), "평수": prop["size_pyeong"],
                 "월관리비": prop.get("monthly_mgmt_fee", 15), "비고": prop["note"],
+                "최근입력일": prop.get("saved_at", ""),
                 "매매 순비용": pn, "전세 순비용": jn, "월세 순비용": wn,
                 "최적옵션": best, "최적 순비용": opt_costs[best], "전세가율(%)": jr * 100,
             })
