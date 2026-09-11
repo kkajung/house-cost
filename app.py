@@ -456,6 +456,7 @@ NEW_PROPERTY_ID = "__NEW__"  # '새 물건 추가' 상태를 나타내는 센티
 
 DEFAULT_FORM_VALUES = {
     "f_apt_name": "",
+    "f_dong": "",
     "f_size_pyeong": 25.0,
     "f_note": "",
     "f_monthly_mgmt_fee": 15,
@@ -471,10 +472,18 @@ DEFAULT_FORM_VALUES = {
 }
 
 
+def build_property_key(name: str, dong: str) -> str:
+    """아파트 이름 + 동을 물건 저장소의 고유 키로 결합 (같은 단지의 다른 동을 구분하기 위함)"""
+    name = (name or "").strip()
+    dong = (dong or "").strip()
+    return f"{name} {dong}" if dong else name
+
+
 def load_property_into_form(pid: str):
     """저장된 물건 데이터를 입력 폼(session_state)에 채워 넣는다."""
     prop = st.session_state.properties[pid]
     st.session_state.f_apt_name = prop["name"]
+    st.session_state.f_dong = prop.get("dong", "")
     st.session_state.f_size_pyeong = prop["size_pyeong"]
     st.session_state.f_note = prop["note"]
     st.session_state.f_monthly_mgmt_fee = prop.get("monthly_mgmt_fee", DEFAULT_FORM_VALUES["f_monthly_mgmt_fee"])
@@ -579,22 +588,27 @@ with tab_analyze:
         options=pid_options,
         format_func=lambda pid: (
             "➕ 새 물건 추가" if pid == NEW_PROPERTY_ID
-            else f'{st.session_state.properties[pid]["name"]} ({st.session_state.properties[pid]["size_pyeong"]:.0f}평)'
+            else (
+                f'{st.session_state.properties[pid]["name"]}'
+                f'{" " + st.session_state.properties[pid]["dong"] if st.session_state.properties[pid].get("dong") else ""}'
+                f' ({st.session_state.properties[pid]["size_pyeong"]:.0f}평)'
+            )
         ),
         key="selected_property_id",
         on_change=handle_property_switch,
     )
 
     st.subheader("🏷️ 물건 정보")
-    c1, c2, c3, c4 = st.columns([2, 1, 1, 2])
+    c1, c2, c3, c4 = st.columns([2, 1, 1, 1.2])
     with c1:
-        st.text_input("아파트 이름", key="f_apt_name", placeholder="예: OO아파트 101동")
+        st.text_input("아파트 이름", key="f_apt_name", placeholder="예: OO아파트")
     with c2:
-        st.number_input("평수", min_value=0.0, step=0.5, format="%.1f", key="f_size_pyeong")
+        st.text_input("동", key="f_dong", placeholder="예: 101동")
     with c3:
-        st.number_input("월 관리비 (만원)", min_value=0, step=1, key="f_monthly_mgmt_fee")
+        st.number_input("평수", min_value=0.0, step=0.5, format="%.1f", key="f_size_pyeong")
     with c4:
-        st.text_input("비고", key="f_note", placeholder="예: 역세권, 로열층, 남향 등")
+        st.number_input("월 관리비 (만원)", min_value=0, step=1, key="f_monthly_mgmt_fee")
+    st.text_input("비고", key="f_note", placeholder="예: 역세권, 로열층, 남향 등")
 
     st.divider()
     st.subheader("🔍 실거래가 매칭 & 최근 시세 추이")
@@ -654,14 +668,17 @@ with tab_analyze:
 
     if save_clicked:
         name = st.session_state.f_apt_name.strip()
+        dong = st.session_state.f_dong.strip()
         if not name:
             st.error("아파트 이름을 입력해야 저장할 수 있습니다.")
         else:
+            new_pid = build_property_key(name, dong)
             prev_id = st.session_state.selected_property_id
-            if prev_id != NEW_PROPERTY_ID and prev_id != name and prev_id in st.session_state.properties:
-                del st.session_state.properties[prev_id]  # 이름 변경 시 기존 항목 정리
-            st.session_state.properties[name] = {
+            if prev_id != NEW_PROPERTY_ID and prev_id != new_pid and prev_id in st.session_state.properties:
+                del st.session_state.properties[prev_id]  # 이름/동 변경 시 기존 항목 정리
+            st.session_state.properties[new_pid] = {
                 "name": name,
+                "dong": dong,
                 "size_pyeong": st.session_state.f_size_pyeong,
                 "note": st.session_state.f_note,
                 "monthly_mgmt_fee": st.session_state.f_monthly_mgmt_fee,
@@ -675,8 +692,8 @@ with tab_analyze:
                 "wolse_monthly": st.session_state.f_wolse_monthly,
                 "wolse_loan_rate": st.session_state.f_wolse_loan_rate,
             }
-            st.session_state.pending_select_id = name
-            st.success(f"'{name}' 물건이 저장되었습니다. '📊 물건 비교' 탭에서 다른 물건과 비교할 수 있습니다.")
+            st.session_state.pending_select_id = new_pid
+            st.success(f"'{new_pid}' 물건이 저장되었습니다. '📊 물건 비교' 탭에서 다른 물건과 비교할 수 있습니다.")
             st.rerun()
 
     if delete_clicked and st.session_state.selected_property_id != NEW_PROPERTY_ID:
@@ -753,7 +770,7 @@ with tab_analyze:
     m2.metric("전세 순비용", fmt_money(jeonse_net))
     m3.metric("월세 순비용", fmt_money(wolse_net))
 
-    apt_label = st.session_state.f_apt_name.strip() or "현재 물건"
+    apt_label = build_property_key(st.session_state.f_apt_name, st.session_state.f_dong) or "현재 물건"
     st.success(
         f"✅ [{apt_label}] 최적 선택: {best_option} — 거주 예정기간 {target_period:.1f}년 기준 실질 순비용이 가장 낮습니다. "
         f"(차선 대비 약 {fmt_money(saving)} 절감)"
@@ -855,7 +872,7 @@ with tab_compare:
             jr = safe_div(prop["jeonse_deposit"], prop["sale_price"])
 
             rows.append({
-                "물건명": prop["name"], "평수": prop["size_pyeong"],
+                "물건명": prop["name"], "동": prop.get("dong", ""), "평수": prop["size_pyeong"],
                 "월관리비": prop.get("monthly_mgmt_fee", 15), "비고": prop["note"],
                 "매매 순비용": pn, "전세 순비용": jn, "월세 순비용": wn,
                 "최적옵션": best, "최적 순비용": opt_costs[best], "전세가율(%)": jr * 100,
