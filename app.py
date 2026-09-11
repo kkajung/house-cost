@@ -88,6 +88,14 @@ def fmt_money(value: float) -> str:
     return f"{value:,.0f}만원"
 
 
+def money_hint(value: float) -> None:
+    """number_input 아래에 콤마(천 단위 구분) 표기를 작은 캡션으로 보여준다."""
+    try:
+        st.caption(f"{float(value):,.0f} 만원")
+    except (TypeError, ValueError):
+        pass
+
+
 def safe_div(a: float, b: float) -> float:
     """0으로 나누기 방지"""
     return a / b if b not in (0, None) else 0.0
@@ -673,6 +681,7 @@ with st.sidebar:
     st.header("⚙️ 공통 입력값")
     st.caption("보유 자금 등 매수자 기준 값으로, 모든 물건에 동일하게 적용됩니다.")
     own_capital = st.number_input("보유 자금 (만원)", min_value=0, value=30000, step=1000)
+    money_hint(own_capital)
     target_period = st.number_input("거주 예정 기간 (년)", min_value=0.5, value=4.0, step=0.5, format="%.1f")
     opportunity_rate = st.number_input("자기자본 기회비용 연수익률 (%)", min_value=0.0, value=4.0, step=0.1, format="%.1f")
     inflation_rate = st.number_input("물가상승률 / 임대료 상승률 (%)", min_value=0.0, value=3.0, step=0.1, format="%.1f")
@@ -680,7 +689,9 @@ with st.sidebar:
     st.subheader("공통 기타비용")
     st.caption("월 관리비는 물건마다 달라 '물건 분석' 탭의 물건 정보에서 입력합니다.")
     moving_cost = st.number_input("이사비 (만원)", min_value=0, value=150, step=10)
+    money_hint(moving_cost)
     cleaning_cost = st.number_input("청소비 (만원)", min_value=0, value=30, step=5)
+    money_hint(cleaning_cost)
 
     with st.expander("🏛️ 세율 설정 (정책 변경 시 최신 고시 값으로 수정)"):
         st.caption(
@@ -689,7 +700,9 @@ with st.sidebar:
         )
         st.markdown("**취득세(지방세법) 구간·세율**")
         acq_threshold1 = st.number_input("취득세 1구간 기준금액 (만원, 예: 6억=60000)", min_value=0, value=60000, step=1000)
+        money_hint(acq_threshold1)
         acq_threshold2 = st.number_input("취득세 2구간 기준금액 (만원, 예: 9억=90000)", min_value=0, value=90000, step=1000)
+        money_hint(acq_threshold2)
         acq_rate_min = st.number_input("최저 취득세율 (%, 1구간 이하)", min_value=0.0, value=1.0, step=0.1, format="%.1f")
         acq_rate_max = st.number_input("최고 취득세율 (%, 2구간 초과)", min_value=0.0, value=3.0, step=0.1, format="%.1f")
         edu_tax_ratio = st.number_input("지방교육세율 (취득세율 대비 %)", min_value=0.0, value=10.0, step=1.0, format="%.1f")
@@ -748,6 +761,7 @@ with tab_analyze:
         st.number_input("평수", min_value=0.0, step=0.5, format="%.1f", key="f_size_pyeong")
     with c4:
         st.number_input("월 관리비 (만원)", min_value=0, step=1, key="f_monthly_mgmt_fee")
+        money_hint(st.session_state.f_monthly_mgmt_fee)
     st.text_input("비고", key="f_note", placeholder="예: 역세권, 로열층, 남향 등")
 
     st.divider()
@@ -889,14 +903,17 @@ with tab_analyze:
         with st.container(border=True):
             st.markdown("#### 🏠 매매")
             st.number_input("매매가 (만원)", min_value=0, step=1000, key="f_sale_price")
+            money_hint(st.session_state.f_sale_price)
             st.number_input("예상 연간 주택가격 상승률 (%)", step=0.1, format="%.1f", key="f_price_growth_rate")
             st.number_input("주택담보대출 금리 (%)", min_value=0.0, step=0.1, format="%.1f", key="f_mortgage_rate")
             st.number_input("수리/인테리어비 (만원)", min_value=0, step=100, key="f_renovation_cost")
+            money_hint(st.session_state.f_renovation_cost)
 
     with col_jeonse:
         with st.container(border=True):
             st.markdown("#### 🏢 전세")
             st.number_input("전세 보증금 (만원)", min_value=0, step=1000, key="f_jeonse_deposit")
+            money_hint(st.session_state.f_jeonse_deposit)
             st.number_input("전세자금대출 금리 (%)", min_value=0.0, step=0.1, format="%.1f", key="f_jeonse_loan_rate")
 
             jeonse_ratio = safe_div(st.session_state.f_jeonse_deposit, st.session_state.f_sale_price)
@@ -910,7 +927,9 @@ with tab_analyze:
         with st.container(border=True):
             st.markdown("#### 🔑 월세")
             st.number_input("월세 보증금 (만원)", min_value=0, step=500, key="f_wolse_deposit")
+            money_hint(st.session_state.f_wolse_deposit)
             st.number_input("월세액 (만원)", min_value=0, step=5, key="f_wolse_monthly")
+            money_hint(st.session_state.f_wolse_monthly)
             st.number_input("보증금 대출금리 (%)", min_value=0.0, step=0.1, format="%.1f", key="f_wolse_loan_rate")
 
     # ----- 현재 입력값 기준 계산 -----
