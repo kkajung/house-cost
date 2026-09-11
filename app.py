@@ -699,6 +699,134 @@ def make_trend_chart(trend_df: pd.DataFrame, apt_name: str, is_mock: bool) -> go
 
 
 # ======================================================================================
+# 물건(매물) 공유 저장소 — Google Sheets 연동
+# secrets.toml에 [gcp_service_account]와 GSHEET_ID가 설정되어 있으면, 저장/삭제할 때마다
+# Google Sheets에도 함께 기록해 컴퓨터·휴대폰 등 다른 기기에서도 같은 물건 목록을 볼 수 있다.
+# 설정되어 있지 않으면 이 세션(브라우저 탭)에만 저장되는 기존 동작으로 자동 대체된다.
+# ======================================================================================
+GSHEET_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+PROPERTY_COLUMNS = [
+    "pid", "name", "dong", "region_label", "custom_lawd_cd", "size_pyeong", "note",
+    "monthly_mgmt_fee", "sale_price", "price_growth_rate", "mortgage_rate", "renovation_cost",
+    "jeonse_deposit", "jeonse_loan_rate", "wolse_deposit", "wolse_monthly", "wolse_loan_rate",
+]
+
+
+@st.cache_resource(show_spinner=False)
+def _get_gsheet_worksheet():
+    """Google Sheets 연결 (연결 객체는 세션 동안 재사용). 시크릿이 없으면 None."""
+    sa_info = get_secret("gcp_service_account")
+    sheet_id = get_secret("GSHEET_ID")
+    if not sa_info or not sheet_id:
+        return None
+    try:
+        import gspread
+        from google.oauth2.service_account import Credentials
+
+        creds = Credentials.from_service_account_info(dict(sa_info), scopes=GSHEET_SCOPES)
+        client = gspread.authorize(creds)
+        sh = client.open_by_key(sheet_id)
+        try:
+            ws = sh.worksheet("properties")
+        except gspread.WorksheetNotFound:
+            ws = sh.add_worksheet(title="properties", rows=1000, cols=len(PROPERTY_COLUMNS))
+            ws.append_row(PROPERTY_COLUMNS)
+        return ws
+    except Exception:
+        return None
+
+
+def gsheet_enabled() -> bool:
+    return _get_gsheet_worksheet() is not None
+
+
+def load_properties_from_gsheet() -> dict:
+    """Google Sheets의 모든 물건 행을 읽어 {pid: property_dict} 형태로 반환"""
+    ws = _get_gsheet_worksheet()
+    if ws is None:
+        return {}
+    try:
+        records = ws.get_all_records()
+    except Exception:
+        return {}
+
+    def _num(v, cast=float, default=0):
+        try:
+            return cast(v)
+        except (TypeError, ValueError):
+            return default
+
+    props = {}
+    for row in records:
+        name = str(row.get("name", "")).strip()
+        dong = str(row.get("dong", "")).strip()
+        pid = str(row.get("pid", "")).strip() or build_property_key(name, dong)
+        if not pid or not name:
+            continue
+        props[pid] = {
+            "name": name,
+            "dong": dong,
+            "region_label": row.get("region_label") or DEFAULT_FORM_VALUES["f_region_label"],
+            "custom_lawd_cd": str(row.get("custom_lawd_cd", "")),
+            "size_pyeong": _num(row.get("size_pyeong"), float, 25.0),
+            "note": str(row.get("note", "")),
+            "monthly_mgmt_fee": _num(row.get("monthly_mgmt_fee"), int, 15),
+            "sale_price": _num(row.get("sale_price"), int, 0),
+            "price_growth_rate": _num(row.get("price_growth_rate"), float, 0.0),
+            "mortgage_rate": _num(row.get("mortgage_rate"), float, 0.0),
+            "renovation_cost": _num(row.get("renovation_cost"), int, 0),
+            "jeonse_deposit": _num(row.get("jeonse_deposit"), int, 0),
+            "jeonse_loan_rate": _num(row.get("jeonse_loan_rate"), float, 0.0),
+            "wolse_deposit": _num(row.get("wolse_deposit"), int, 0),
+            "wolse_monthly": _num(row.get("wolse_monthly"), int, 0),
+            "wolse_loan_rate": _num(row.get("wolse_loan_rate"), float, 0.0),
+        }
+    return props
+
+
+def save_property_to_gsheet(pid: str, prop: dict) -> None:
+    """물건 하나를 Google Sheets에 upsert(있으면 갱신, 없으면 추가)"""
+    ws = _get_gsheet_worksheet()
+    if ws is None:
+        return
+    import gspread
+
+    row_values = [pid] + [str(prop.get(col, "")) for col in PROPERTY_COLUMNS[1:]]
+    try:
+        cell = ws.find(pid, in_column=1)
+    except gspread.exceptions.CellNotFound:
+        cell = None
+    except Exception:
+        return
+    try:
+        if cell:
+            end_a1 = gspread.utils.rowcol_to_a1(cell.row, len(PROPERTY_COLUMNS))
+            ws.update(f"A{cell.row}:{end_a1}", [row_values])
+        else:
+            ws.append_row(row_values)
+    except Exception:
+        pass
+
+
+def delete_property_from_gsheet(pid: str) -> None:
+    ws = _get_gsheet_worksheet()
+    if ws is None:
+        return
+    import gspread
+
+    try:
+        cell = ws.find(pid, in_column=1)
+    except gspread.exceptions.CellNotFound:
+        return
+    except Exception:
+        return
+    try:
+        ws.delete_rows(cell.row)
+    except Exception:
+        pass
+
+
+# ======================================================================================
 # 물건(매물) 저장소 — 세션 상태 초기화
 # ======================================================================================
 NEW_PROPERTY_ID = "__NEW__"  # '새 물건 추가' 상태를 나타내는 센티널 (None 사용 시 selectbox가 플레이스홀더를 잘못 표시함)
@@ -752,7 +880,7 @@ def load_property_into_form(pid: str):
 
 
 if "properties" not in st.session_state:
-    st.session_state.properties = {}
+    st.session_state.properties = load_properties_from_gsheet() if gsheet_enabled() else {}
 if "selected_property_id" not in st.session_state:
     st.session_state.selected_property_id = NEW_PROPERTY_ID
 for _k, _v in DEFAULT_FORM_VALUES.items():
@@ -839,7 +967,20 @@ tab_analyze, tab_compare = st.tabs(["🏢 물건 분석", "📊 물건 비교"])
 # 탭 1. 물건 분석 — 하나의 물건에 대해 매매·전세·월세를 한 화면에서 동시 비교
 # --------------------------------------------------------------------------------------
 with tab_analyze:
-    st.subheader("🔎 분석할 물건 선택")
+    sel_head_col1, sel_head_col2 = st.columns([5, 1.3])
+    with sel_head_col1:
+        st.subheader("🔎 분석할 물건 선택")
+    with sel_head_col2:
+        if gsheet_enabled():
+            if st.button("🔄 새로고침", use_container_width=True, help="다른 기기에서 저장한 최신 물건 목록을 다시 불러옵니다"):
+                st.session_state.properties = load_properties_from_gsheet()
+                st.session_state.pending_select_id = NEW_PROPERTY_ID
+                st.rerun()
+    if gsheet_enabled():
+        st.caption("🔗 공유 저장소(Google Sheets) 연동됨 — 다른 기기에서 저장한 물건도 새로고침하면 보입니다.")
+    else:
+        st.caption("⚠️ 공유 저장소가 연동되지 않아 이 브라우저에만 저장됩니다. (secrets.toml에 GSHEET 설정 필요)")
+
     pid_options = [NEW_PROPERTY_ID] + list(st.session_state.properties.keys())
     st.selectbox(
         "저장된 물건을 불러오거나 새 물건을 추가하세요",
@@ -971,6 +1112,8 @@ with tab_analyze:
             prev_id = st.session_state.selected_property_id
             if prev_id != NEW_PROPERTY_ID and prev_id != new_pid and prev_id in st.session_state.properties:
                 del st.session_state.properties[prev_id]  # 이름/동 변경 시 기존 항목 정리
+                if gsheet_enabled():
+                    delete_property_from_gsheet(prev_id)
             st.session_state.properties[new_pid] = {
                 "name": name,
                 "dong": dong,
@@ -990,12 +1133,18 @@ with tab_analyze:
                 "wolse_loan_rate": st.session_state.f_wolse_loan_rate,
             }
             st.session_state.pending_select_id = new_pid
-            st.success(f"'{new_pid}' 물건이 저장되었습니다. '📊 물건 비교' 탭에서 다른 물건과 비교할 수 있습니다.")
+            if gsheet_enabled():
+                save_property_to_gsheet(new_pid, st.session_state.properties[new_pid])
+                st.success(f"'{new_pid}' 물건이 저장되고 공유 저장소에 동기화되었습니다. 다른 기기에서도 바로 확인할 수 있습니다.")
+            else:
+                st.success(f"'{new_pid}' 물건이 저장되었습니다. (공유 저장소 미연동 — 이 브라우저에서만 보입니다)")
             st.rerun()
 
     if delete_clicked and st.session_state.selected_property_id != NEW_PROPERTY_ID:
         deleted_name = st.session_state.selected_property_id
         del st.session_state.properties[deleted_name]
+        if gsheet_enabled():
+            delete_property_from_gsheet(deleted_name)
         st.session_state.pending_select_id = NEW_PROPERTY_ID
         st.info(f"'{deleted_name}' 물건을 삭제했습니다.")
         st.rerun()
@@ -1147,7 +1296,17 @@ with tab_analyze:
 # 탭 2. 물건 비교 — 저장된 여러 물건의 매매/전세/월세 순비용 종합 비교
 # --------------------------------------------------------------------------------------
 with tab_compare:
-    st.header("📊 저장된 물건 종합 비교")
+    compare_head_col1, compare_head_col2 = st.columns([5, 1.3])
+    with compare_head_col1:
+        st.header("📊 저장된 물건 종합 비교")
+    with compare_head_col2:
+        if gsheet_enabled():
+            if st.button(
+                "🔄 새로고침", use_container_width=True, key="btn_refresh_compare",
+                help="다른 기기에서 저장한 최신 물건 목록을 다시 불러옵니다",
+            ):
+                st.session_state.properties = load_properties_from_gsheet()
+                st.rerun()
 
     props = st.session_state.properties
     if not props:
@@ -1227,6 +1386,8 @@ with tab_compare:
                 for pid in to_delete:
                     if pid in st.session_state.properties:
                         del st.session_state.properties[pid]
+                        if gsheet_enabled():
+                            delete_property_from_gsheet(pid)
                 if st.session_state.selected_property_id in to_delete:
                     st.session_state.pending_select_id = NEW_PROPERTY_ID
                 st.rerun()
