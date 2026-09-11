@@ -3,12 +3,73 @@
 Streamlit + Pandas + NumPy + Plotly
 """
 
+import difflib
+
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import streamlit as st
 
 st.set_page_config(page_title="지영 & 경아의 보금자리 찾아 삼만리", page_icon="🏠", layout="wide")
+
+# 기본 테마의 과도하게 큰 폰트 크기를 줄여 화면 밀도와 시인성을 개선
+st.markdown(
+    """
+    <style>
+    h1 { font-size: 1.6rem !important; line-height: 1.3 !important; }
+    h2 { font-size: 1.25rem !important; }
+    h3 { font-size: 1.05rem !important; }
+    h4 { font-size: 0.95rem !important; }
+    p, li, label, .stMarkdown, .stCaption { font-size: 0.9rem !important; }
+    [data-testid="stMetricValue"] { font-size: 1.3rem !important; }
+    [data-testid="stMetricLabel"] { font-size: 0.8rem !important; }
+    [data-testid="stMetricDelta"] { font-size: 0.8rem !important; }
+    .stAlert p { font-size: 0.88rem !important; }
+    [data-testid="stWidgetLabel"] p { font-size: 0.85rem !important; }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+# ======================================================================================
+# 접근 제어 — 허가된 사람만 로그인 가능하도록 비밀번호로 게이트
+# 비밀번호는 st.secrets(.streamlit/secrets.toml, git에는 올라가지 않음)에만 저장한다.
+# ======================================================================================
+def get_secret(key: str):
+    try:
+        return st.secrets[key]
+    except Exception:
+        return None
+
+
+def check_password() -> bool:
+    """비밀번호가 맞으면 True. secrets에 APP_PASSWORD가 설정되지 않았으면 접근을 막는다(fail-closed)."""
+    if st.session_state.get("authenticated"):
+        return True
+
+    app_password = get_secret("APP_PASSWORD")
+
+    st.title("🔒 접근 제한")
+    if not app_password:
+        st.error(
+            "APP_PASSWORD가 설정되지 않았습니다. 관리자는 `.streamlit/secrets.toml`에 "
+            "`APP_PASSWORD = \"...\"` 값을 추가한 뒤 앱을 다시 시작하세요."
+        )
+        return False
+
+    entered = st.text_input("비밀번호를 입력하세요", type="password", key="password_input")
+    if st.button("입장"):
+        if entered == app_password:
+            st.session_state.authenticated = True
+            st.rerun()
+        else:
+            st.error("비밀번호가 올바르지 않습니다.")
+    return False
+
+
+if not check_password():
+    st.stop()
 
 
 # ======================================================================================
@@ -313,6 +374,82 @@ def make_sensitivity_heatmap(price_growth_range, loan_rate_range, diff_matrix) -
 
 
 # ======================================================================================
+# 실거래가 조회 — 국토교통부 공공데이터 API 연동 전까지 목업(Mock) 데이터로 동작
+#
+# ⚠️ 아래 3개 함수(search_apartment_matches / fetch_real_trade_trend)는 추후
+# 공공데이터포털 서비스키가 발급되면 실제 API 호출로 교체될 자리입니다.
+# UI 코드는 이 함수들의 반환 형식(리스트 / DataFrame)만 그대로 유지하면 되므로
+# 여기 내부 구현만 바뀌면 하위 UI는 수정할 필요가 없습니다.
+# ======================================================================================
+IS_MOCK_REAL_DATA = True  # TODO: 실제 API 연동 완료 시 False로 변경
+
+MOCK_APT_DB = [
+    {"name": "래미안 강남", "region": "서울 강남구", "base_sale": 135000, "base_jeonse": 95000, "base_wolse_rent": 250},
+    {"name": "래미안 서초", "region": "서울 서초구", "base_sale": 142000, "base_jeonse": 98000, "base_wolse_rent": 260},
+    {"name": "e편한세상 목동", "region": "서울 양천구", "base_sale": 98000, "base_jeonse": 68000, "base_wolse_rent": 180},
+    {"name": "자이 판교", "region": "경기 성남시", "base_sale": 118000, "base_jeonse": 78000, "base_wolse_rent": 200},
+    {"name": "푸르지오 마포", "region": "서울 마포구", "base_sale": 105000, "base_jeonse": 72000, "base_wolse_rent": 190},
+    {"name": "힐스테이트 광교", "region": "경기 수원시", "base_sale": 92000, "base_jeonse": 62000, "base_wolse_rent": 160},
+    {"name": "아크로 리버파크", "region": "서울 서초구", "base_sale": 210000, "base_jeonse": 140000, "base_wolse_rent": 350},
+    {"name": "테스트아파트", "region": "서울 임의구", "base_sale": 60000, "base_jeonse": 42000, "base_wolse_rent": 100},
+]
+
+
+def search_apartment_matches(query: str, n: int = 5, cutoff: float = 0.35):
+    """
+    입력한 아파트 이름과 실거래가 DB 등록명을 매칭한다.
+    TODO(API 연동 시): 국토교통부 '아파트 매매/전월세 실거래가' API에 법정동코드로 조회 후
+    반환되는 아파트명 목록을 대상으로 동일하게 매칭하도록 교체.
+    """
+    query = (query or "").strip()
+    if not query:
+        return []
+    names = [d["name"] for d in MOCK_APT_DB]
+    close = difflib.get_close_matches(query, names, n=n, cutoff=cutoff)
+    substring_matches = [nm for nm in names if query in nm or nm in query]
+    ordered = []
+    for nm in close + substring_matches:
+        if nm not in ordered:
+            ordered.append(nm)
+    return ordered[:n]
+
+
+def fetch_real_trade_trend(matched_name: str, months: int = 24) -> pd.DataFrame:
+    """
+    매칭된 아파트의 최근 N개월 매매/전세/월세 실거래가 추이를 반환한다.
+    TODO(API 연동 시): getRTMSDataSvcAptTradeDev(매매 상세) + getRTMSDataSvcAptRent(전월세)
+    API를 계약년월 단위로 반복 호출해 실제 시계열로 교체.
+    """
+    apt_record = next((d for d in MOCK_APT_DB if d["name"] == matched_name), None)
+    if apt_record is None:
+        return pd.DataFrame(columns=["연월", "매매", "전세", "월세"])
+
+    seed = abs(hash(matched_name)) % (2**32)
+    rng = np.random.default_rng(seed)
+    dates = pd.date_range(end=pd.Timestamp.today().replace(day=1), periods=months, freq="MS")
+    sale = apt_record["base_sale"] * (1 + np.cumsum(rng.normal(0.004, 0.012, months)))
+    jeonse = apt_record["base_jeonse"] * (1 + np.cumsum(rng.normal(0.003, 0.010, months)))
+    wolse_rent = apt_record["base_wolse_rent"] * (1 + np.cumsum(rng.normal(0.002, 0.008, months)))
+    return pd.DataFrame({"연월": dates, "매매": sale, "전세": jeonse, "월세": wolse_rent})
+
+
+def make_trend_chart(trend_df: pd.DataFrame, apt_name: str) -> go.Figure:
+    fig = go.Figure()
+    fig.add_scatter(x=trend_df["연월"], y=trend_df["매매"], mode="lines+markers", name="매매(만원)")
+    fig.add_scatter(x=trend_df["연월"], y=trend_df["전세"], mode="lines+markers", name="전세(만원)")
+    fig.add_scatter(
+        x=trend_df["연월"], y=trend_df["월세"], mode="lines+markers", name="월세(만원, 우측축)", yaxis="y2",
+    )
+    fig.update_layout(
+        title=f"{apt_name} 최근 {len(trend_df)}개월 매매·전세·월세 실거래가 추이" + (" (Mock 데이터)" if IS_MOCK_REAL_DATA else ""),
+        xaxis_title="계약년월", yaxis_title="매매·전세 보증금(만원)",
+        yaxis2=dict(title="월세(만원)", overlaying="y", side="right"),
+        height=420, margin=dict(t=60, b=10), legend=dict(orientation="h", y=1.15),
+    )
+    return fig
+
+
+# ======================================================================================
 # 물건(매물) 저장소 — 세션 상태 초기화
 # ======================================================================================
 NEW_PROPERTY_ID = "__NEW__"  # '새 물건 추가' 상태를 나타내는 센티널 (None 사용 시 selectbox가 플레이스홀더를 잘못 표시함)
@@ -458,6 +595,53 @@ with tab_analyze:
         st.number_input("월 관리비 (만원)", min_value=0, step=1, key="f_monthly_mgmt_fee")
     with c4:
         st.text_input("비고", key="f_note", placeholder="예: 역세권, 로열층, 남향 등")
+
+    st.divider()
+    st.subheader("🔍 실거래가 매칭 & 최근 시세 추이")
+    if IS_MOCK_REAL_DATA:
+        st.info(
+            "⚠️ 아직 공공데이터 API 키가 연동되지 않아 임시 목업(Mock) 데이터로 동작합니다. "
+            "API 키가 발급되면 국토교통부 실거래가로 자동 교체됩니다."
+        )
+
+    apt_query = st.session_state.f_apt_name.strip()
+    if not apt_query:
+        st.caption("💡 위 '아파트 이름'을 입력하면 실거래가 DB에서 유사한 물건을 자동으로 찾아드립니다.")
+    else:
+        matches = search_apartment_matches(apt_query)
+        if not matches:
+            st.warning(f"'{apt_query}'와(과) 일치하는 실거래가 등록 아파트를 찾지 못했습니다. 이름을 다르게 입력해 보세요.")
+            st.session_state.pop("matched_apt_name", None)
+        else:
+            if st.session_state.get("matched_apt_name") not in matches:
+                st.session_state.matched_apt_name = matches[0]
+            matched_name = st.selectbox(
+                "실거래가 DB에서 매칭된 아파트를 선택하세요", options=matches, key="matched_apt_name",
+            )
+            matched_region = next(d["region"] for d in MOCK_APT_DB if d["name"] == matched_name)
+            st.caption(f"📍 매칭된 물건: {matched_name} ({matched_region})")
+
+            trend_df = fetch_real_trade_trend(matched_name)
+            st.plotly_chart(make_trend_chart(trend_df, matched_name), use_container_width=True)
+
+            st.markdown("**📊 내 시뮬레이션 입력값 vs 실거래가 DB 최근값 비교**")
+            latest = trend_df.iloc[-1]
+            mc1, mc2, mc3 = st.columns(3)
+            mc1.metric(
+                "매매가 (내 입력)", fmt_money(st.session_state.f_sale_price),
+                delta=fmt_money(st.session_state.f_sale_price - latest["매매"]),
+            )
+            mc2.metric(
+                "전세보증금 (내 입력)", fmt_money(st.session_state.f_jeonse_deposit),
+                delta=fmt_money(st.session_state.f_jeonse_deposit - latest["전세"]),
+            )
+            mc3.metric(
+                "월세액 (내 입력)", fmt_money(st.session_state.f_wolse_monthly),
+                delta=fmt_money(st.session_state.f_wolse_monthly - latest["월세"]),
+            )
+            st.caption("델타(▲/▼)는 '내가 입력한 시뮬레이션 값 − 실거래가 DB 최근값' 기준입니다.")
+
+    st.divider()
 
     btn_col1, btn_col2, _ = st.columns([1, 1, 4])
     with btn_col1:
