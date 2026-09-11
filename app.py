@@ -30,6 +30,20 @@ st.markdown(
     [data-testid="stMetricDelta"] { font-size: 0.8rem !important; }
     .stAlert p { font-size: 0.88rem !important; }
     [data-testid="stWidgetLabel"] p { font-size: 0.85rem !important; }
+
+    /* 반응형 — 좁은(모바일) 화면에서는 가로 배치된 컬럼들을 세로로 쌓는다 */
+    @media (max-width: 700px) {
+        [data-testid="stHorizontalBlock"] {
+            flex-direction: column !important;
+        }
+        [data-testid="stHorizontalBlock"] > [data-testid="column"] {
+            width: 100% !important;
+            flex: 1 1 100% !important;
+            min-width: 100% !important;
+        }
+        [data-testid="stMetricValue"] { font-size: 1.15rem !important; }
+        h1 { font-size: 1.35rem !important; }
+    }
     </style>
     """,
     unsafe_allow_html=True,
@@ -96,6 +110,39 @@ def money_hint(value: float) -> None:
         st.caption(f"{float(value):,.0f} 만원")
     except (TypeError, ValueError):
         pass
+
+
+def brokerage_fee_control(amount: float, tx_type: str, key: str, included_key: str) -> None:
+    """
+    계약금액 기준 법정 상한 중개수수료(복비)를 자동 계산해 보여주고, 직접 수정할 수 있게 한다.
+    (네고 시 하향조정 등은 값을 직접 고치고, 계약 갱신처럼 새 중개수수료가 아예 안 드는 경우는
+    "활성" 체크를 꺼서 시뮬레이션에서 제외할 수 있다 — 이 경우 자동계산값은 참고용으로 그대로 남는다.)
+    """
+    # 위젯 생성 전에 예약된 리셋 값을 먼저 반영 (생성 후에는 session_state를 직접 못 바꾸므로)
+    pending_key = f"_pending_{key}"
+    if pending_key in st.session_state:
+        st.session_state[key] = st.session_state.pop(pending_key)
+
+    auto_fee, auto_rate = calc_brokerage_fee(amount, tx_type)
+    st.number_input(
+        "중개료 (만원)", min_value=0, step=1, key=key,
+        help=f"계약금액 기준 법정 상한요율({auto_rate:.1f}%) 자동계산값은 {auto_fee:,.0f}만원입니다. "
+             "네고했으면 직접 고치세요.",
+    )
+    ccol1, ccol2 = st.columns([1.7, 1])
+    with ccol1:
+        st.checkbox(
+            "✅ 활성", key=included_key,
+            help="계약 갱신 등으로 새로 중개수수료가 들지 않는 경우 체크를 해제하면 이 비용이 순비용 계산에서 빠집니다.",
+        )
+    with ccol2:
+        if st.button("↺", key=f"reset_{key}", use_container_width=True, help="법정 상한 자동계산값으로 되돌리기"):
+            st.session_state[pending_key] = round(auto_fee)
+            st.rerun()
+    if st.session_state[included_key]:
+        money_hint(st.session_state[key])
+    else:
+        st.caption("⏭️ 미포함 — 순비용 계산에서 제외됨")
 
 
 def safe_div(a: float, b: float) -> float:
@@ -193,7 +240,10 @@ def calc_purchase(g: dict, p: dict):
     """매매 시나리오: g=공통 입력, p=매매 입력"""
     period = max(g["target_period"], 0.0001)
     tax, _ = calc_acquisition_tax(p["sale_price"], g)
-    brokerage, _ = calc_brokerage_fee(p["sale_price"], "sale")
+    if p.get("brokerage_fee") is not None:
+        brokerage = p["brokerage_fee"]  # 사용자가 확인/수정한 값 (기본은 법정 상한 자동계산)
+    else:
+        brokerage, _ = calc_brokerage_fee(p["sale_price"], "sale")
     initial_cost = tax + brokerage + g["moving_cost"] + g["cleaning_cost"] + p["renovation_cost"]
     total_needed = p["sale_price"] + initial_cost
 
@@ -237,7 +287,10 @@ def calc_purchase(g: dict, p: dict):
 def calc_jeonse(g: dict, j: dict):
     """전세 시나리오: g=공통 입력, j=전세 입력"""
     period = max(g["target_period"], 0.0001)
-    brokerage, _ = calc_brokerage_fee(j["jeonse_deposit"], "lease")
+    if j.get("brokerage_fee") is not None:
+        brokerage = j["brokerage_fee"]
+    else:
+        brokerage, _ = calc_brokerage_fee(j["jeonse_deposit"], "lease")
     initial_cost = brokerage + g["moving_cost"] + g["cleaning_cost"]
     total_needed = j["jeonse_deposit"] + initial_cost
 
@@ -276,8 +329,11 @@ def calc_jeonse(g: dict, j: dict):
 def calc_wolse(g: dict, w: dict):
     """월세 시나리오: g=공통 입력, w=월세 입력"""
     period = max(g["target_period"], 0.0001)
-    conv_amount = wolse_conversion_amount(w["wolse_deposit"], w["wolse_monthly"])
-    brokerage, _ = calc_brokerage_fee(conv_amount, "lease")
+    if w.get("brokerage_fee") is not None:
+        brokerage = w["brokerage_fee"]
+    else:
+        conv_amount = wolse_conversion_amount(w["wolse_deposit"], w["wolse_monthly"])
+        brokerage, _ = calc_brokerage_fee(conv_amount, "lease")
     initial_cost = brokerage + g["moving_cost"] + g["cleaning_cost"]
     total_needed = w["wolse_deposit"] + initial_cost
 
@@ -767,11 +823,24 @@ def make_trend_chart(trend_df: pd.DataFrame, apt_name: str, is_mock: bool) -> go
 # 설정되어 있지 않으면 이 세션(브라우저 탭)에만 저장되는 기존 동작으로 자동 대체된다.
 # ======================================================================================
 GSHEET_SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
+# 저장/복원 대상이 되는 공통 입력값(사이드바) 필드명 (DEFAULT_FORM_VALUES 안의 "g_" 접두사를 뗀 이름).
+# 물건마다 "저장 시점"의 공통 설정을 스냅샷으로 함께 저장해, 같은 아파트라도 대출조건·보유자금 등이
+# 다른 시나리오를 별도로 비교할 수 있게 한다.
+GLOBAL_SETTING_KEYS = [
+    "own_capital", "target_period", "opportunity_rate", "inflation_rate",
+    "moving_cost", "cleaning_cost", "acq_threshold1", "acq_threshold2",
+    "acq_rate_min", "acq_rate_max", "edu_tax_ratio", "holding_tax_rate",
+]
+
 PROPERTY_COLUMNS = [
     "pid", "name", "dong", "region_label", "custom_lawd_cd", "size_pyeong", "note",
     "monthly_mgmt_fee", "sale_price", "price_growth_rate", "mortgage_rate", "renovation_cost",
     "jeonse_deposit", "jeonse_loan_rate", "wolse_deposit", "wolse_monthly", "wolse_loan_rate",
     "saved_at",
+    # 아래는 나중에 추가된 컬럼들 — 항상 끝에 붙여야 기존 시트의 위치 기반 업데이트가 안 깨진다.
+    "sale_brokerage_fee", "jeonse_brokerage_fee", "wolse_brokerage_fee",
+] + GLOBAL_SETTING_KEYS + [
+    "sale_brokerage_included", "jeonse_brokerage_included", "wolse_brokerage_included",
 ]
 # 저장할 때마다 한 줄씩 누적되는 이력 로그 (덮어쓰지 않음) — 쌓이면 나만의 가격 추이 그래프가 된다.
 HISTORY_COLUMNS = [
@@ -812,7 +881,16 @@ def _get_or_create_worksheet(sheet_name: str, columns: tuple):
     import gspread
 
     try:
-        return sh.worksheet(sheet_name)
+        ws = sh.worksheet(sheet_name)
+        # 이미 존재하는 시트에 나중에 추가된 컬럼이 없으면 헤더 끝에 보강한다 (하위 호환 마이그레이션)
+        try:
+            existing_header = ws.row_values(1)
+            missing = [c for c in columns if c not in existing_header]
+            if missing:
+                ws.update("A1", [existing_header + missing])
+        except Exception:
+            pass
+        return ws
     except gspread.WorksheetNotFound:
         ws = sh.add_worksheet(title=sheet_name, rows=2000, cols=len(columns))
         ws.append_row(list(columns))
@@ -850,6 +928,14 @@ def load_properties_from_gsheet() -> dict:
         except (TypeError, ValueError):
             return default
 
+    def _bool(v, default=True):
+        s = str(v).strip().lower()
+        if s in ("true", "1", "yes"):
+            return True
+        if s in ("false", "0", "no"):
+            return False
+        return default
+
     props = {}
     for row in records:
         name = str(row.get("name", "")).strip()
@@ -875,7 +961,30 @@ def load_properties_from_gsheet() -> dict:
             "wolse_monthly": _num(row.get("wolse_monthly"), int, 0),
             "wolse_loan_rate": _num(row.get("wolse_loan_rate"), float, 0.0),
             "saved_at": str(row.get("saved_at", "")),
+            "sale_brokerage_fee": _num(row.get("sale_brokerage_fee"), int, None),
+            "jeonse_brokerage_fee": _num(row.get("jeonse_brokerage_fee"), int, None),
+            "wolse_brokerage_fee": _num(row.get("wolse_brokerage_fee"), int, None),
+            "sale_brokerage_included": _bool(row.get("sale_brokerage_included"), True),
+            "jeonse_brokerage_included": _bool(row.get("jeonse_brokerage_included"), True),
+            "wolse_brokerage_included": _bool(row.get("wolse_brokerage_included"), True),
         }
+        # 옛날 저장분(중개수수료 컬럼이 없던 시절)은 법정 상한 자동계산값으로 채워준다.
+        prop = props[pid]
+        if prop["sale_brokerage_fee"] is None:
+            fee, _ = calc_brokerage_fee(prop["sale_price"], "sale")
+            prop["sale_brokerage_fee"] = round(fee)
+        if prop["jeonse_brokerage_fee"] is None:
+            fee, _ = calc_brokerage_fee(prop["jeonse_deposit"], "lease")
+            prop["jeonse_brokerage_fee"] = round(fee)
+        if prop["wolse_brokerage_fee"] is None:
+            fee, _ = calc_brokerage_fee(wolse_conversion_amount(prop["wolse_deposit"], prop["wolse_monthly"]), "lease")
+            prop["wolse_brokerage_fee"] = round(fee)
+
+        # 공통 설정값(사이드바) 스냅샷 — 옛날 저장분(컬럼 없음)은 기본값으로 채운다.
+        for g_key in GLOBAL_SETTING_KEYS:
+            default_val = DEFAULT_FORM_VALUES[f"g_{g_key}"]
+            cast = int if isinstance(default_val, int) else float
+            prop[g_key] = _num(row.get(g_key), cast, default_val)
     return props
 
 
@@ -977,7 +1086,24 @@ def make_my_history_chart(history_df: pd.DataFrame, apt_name: str) -> go.Figure:
 # ======================================================================================
 NEW_PROPERTY_ID = "__NEW__"  # '새 물건 추가' 상태를 나타내는 센티널 (None 사용 시 selectbox가 플레이스홀더를 잘못 표시함)
 
+_DEFAULT_SALE_FEE, _ = calc_brokerage_fee(60000, "sale")
+_DEFAULT_JEONSE_FEE, _ = calc_brokerage_fee(45000, "lease")
+_DEFAULT_WOLSE_FEE, _ = calc_brokerage_fee(wolse_conversion_amount(5000, 100), "lease")
+
 DEFAULT_FORM_VALUES = {
+    # 공통 입력값(사이드바) — 이제 물건마다 저장 시점 값을 스냅샷으로 함께 저장한다.
+    "g_own_capital": 30000,
+    "g_target_period": 4.0,
+    "g_opportunity_rate": 4.0,
+    "g_inflation_rate": 3.0,
+    "g_moving_cost": 150,
+    "g_cleaning_cost": 30,
+    "g_acq_threshold1": 60000,
+    "g_acq_threshold2": 90000,
+    "g_acq_rate_min": 1.0,
+    "g_acq_rate_max": 3.0,
+    "g_edu_tax_ratio": 10.0,
+    "g_holding_tax_rate": 0.15,
     "f_apt_name": "",
     "f_dong": "",
     "f_region_label": "서울특별시 강남구",
@@ -989,11 +1115,17 @@ DEFAULT_FORM_VALUES = {
     "f_price_growth_rate": 3.0,
     "f_mortgage_rate": 4.0,
     "f_renovation_cost": 1000,
+    "f_sale_brokerage_fee": round(_DEFAULT_SALE_FEE),
+    "f_sale_brokerage_included": True,
     "f_jeonse_deposit": 45000,
     "f_jeonse_loan_rate": 3.5,
+    "f_jeonse_brokerage_fee": round(_DEFAULT_JEONSE_FEE),
+    "f_jeonse_brokerage_included": True,
     "f_wolse_deposit": 5000,
     "f_wolse_monthly": 100,
     "f_wolse_loan_rate": 4.5,
+    "f_wolse_brokerage_fee": round(_DEFAULT_WOLSE_FEE),
+    "f_wolse_brokerage_included": True,
 }
 
 
@@ -1005,8 +1137,12 @@ def build_property_key(name: str, dong: str) -> str:
 
 
 def load_property_into_form(pid: str):
-    """저장된 물건 데이터를 입력 폼(session_state)에 채워 넣는다."""
+    """저장된 물건 데이터를 입력 폼(session_state)에 채워 넣는다. 공통 설정값(사이드바)도 저장 당시 값으로 복원한다."""
     prop = st.session_state.properties[pid]
+    for g_key in GLOBAL_SETTING_KEYS:
+        session_key = f"g_{g_key}"
+        if g_key in prop:
+            st.session_state[session_key] = prop[g_key]
     st.session_state.f_apt_name = prop["name"]
     st.session_state.f_dong = prop.get("dong", "")
     st.session_state.f_region_label = prop.get("region_label", DEFAULT_FORM_VALUES["f_region_label"])
@@ -1023,6 +1159,19 @@ def load_property_into_form(pid: str):
     st.session_state.f_wolse_deposit = prop["wolse_deposit"]
     st.session_state.f_wolse_monthly = prop["wolse_monthly"]
     st.session_state.f_wolse_loan_rate = prop["wolse_loan_rate"]
+
+    # 중개수수료: 저장된 값이 있으면 그대로(네고/갱신 등 수동 수정 반영), 없으면 법정 상한 자동계산
+    sale_fee_default, _ = calc_brokerage_fee(prop["sale_price"], "sale")
+    jeonse_fee_default, _ = calc_brokerage_fee(prop["jeonse_deposit"], "lease")
+    wolse_fee_default, _ = calc_brokerage_fee(
+        wolse_conversion_amount(prop["wolse_deposit"], prop["wolse_monthly"]), "lease"
+    )
+    st.session_state.f_sale_brokerage_fee = prop.get("sale_brokerage_fee", round(sale_fee_default))
+    st.session_state.f_jeonse_brokerage_fee = prop.get("jeonse_brokerage_fee", round(jeonse_fee_default))
+    st.session_state.f_wolse_brokerage_fee = prop.get("wolse_brokerage_fee", round(wolse_fee_default))
+    st.session_state.f_sale_brokerage_included = prop.get("sale_brokerage_included", True)
+    st.session_state.f_jeonse_brokerage_included = prop.get("jeonse_brokerage_included", True)
+    st.session_state.f_wolse_brokerage_included = prop.get("wolse_brokerage_included", True)
 
 
 if "properties" not in st.session_state:
@@ -1058,18 +1207,18 @@ st.caption("물건별로 매매·전세·월세 조건을 한 화면에서 동�
 
 with st.sidebar:
     st.header("⚙️ 공통 입력값")
-    st.caption("보유 자금 등 매수자 기준 값으로, 모든 물건에 동일하게 적용됩니다.")
-    own_capital = st.number_input("보유 자금 (만원)", min_value=0, value=30000, step=1000)
+    st.caption("물건을 저장할 때 이 값들도 함께 스냅샷으로 저장되고, 불러오면 그 당시 값으로 복원됩니다.")
+    own_capital = st.number_input("보유 자금 (만원)", min_value=0, step=1000, key="g_own_capital")
     money_hint(own_capital)
-    target_period = st.number_input("거주 예정 기간 (년)", min_value=0.5, value=4.0, step=0.5, format="%.1f")
-    opportunity_rate = st.number_input("자기자본 기회비용 연수익률 (%)", min_value=0.0, value=4.0, step=0.1, format="%.1f")
-    inflation_rate = st.number_input("물가상승률 / 임대료 상승률 (%)", min_value=0.0, value=3.0, step=0.1, format="%.1f")
+    target_period = st.number_input("거주 예정 기간 (년)", min_value=0.5, step=0.5, format="%.1f", key="g_target_period")
+    opportunity_rate = st.number_input("자기자본 기회비용 연수익률 (%)", min_value=0.0, step=0.1, format="%.1f", key="g_opportunity_rate")
+    inflation_rate = st.number_input("물가상승률 / 임대료 상승률 (%)", min_value=0.0, step=0.1, format="%.1f", key="g_inflation_rate")
 
     st.subheader("공통 기타비용")
     st.caption("월 관리비는 물건마다 달라 '물건 분석' 탭의 물건 정보에서 입력합니다.")
-    moving_cost = st.number_input("이사비 (만원)", min_value=0, value=150, step=10)
+    moving_cost = st.number_input("이사비 (만원)", min_value=0, step=10, key="g_moving_cost")
     money_hint(moving_cost)
-    cleaning_cost = st.number_input("청소비 (만원)", min_value=0, value=30, step=5)
+    cleaning_cost = st.number_input("청소비 (만원)", min_value=0, step=5, key="g_cleaning_cost")
     money_hint(cleaning_cost)
 
     with st.expander("🏛️ 세율 설정 (정책 변경 시 최신 고시 값으로 수정)"):
@@ -1078,13 +1227,13 @@ with st.sidebar:
             "최신 고시 내용으로 직접 수정하세요."
         )
         st.markdown("**취득세(지방세법) 구간·세율**")
-        acq_threshold1 = st.number_input("취득세 1구간 기준금액 (만원, 예: 6억=60000)", min_value=0, value=60000, step=1000)
+        acq_threshold1 = st.number_input("취득세 1구간 기준금액 (만원, 예: 6억=60000)", min_value=0, step=1000, key="g_acq_threshold1")
         money_hint(acq_threshold1)
-        acq_threshold2 = st.number_input("취득세 2구간 기준금액 (만원, 예: 9억=90000)", min_value=0, value=90000, step=1000)
+        acq_threshold2 = st.number_input("취득세 2구간 기준금액 (만원, 예: 9억=90000)", min_value=0, step=1000, key="g_acq_threshold2")
         money_hint(acq_threshold2)
-        acq_rate_min = st.number_input("최저 취득세율 (%, 1구간 이하)", min_value=0.0, value=1.0, step=0.1, format="%.1f")
-        acq_rate_max = st.number_input("최고 취득세율 (%, 2구간 초과)", min_value=0.0, value=3.0, step=0.1, format="%.1f")
-        edu_tax_ratio = st.number_input("지방교육세율 (취득세율 대비 %)", min_value=0.0, value=10.0, step=1.0, format="%.1f")
+        acq_rate_min = st.number_input("최저 취득세율 (%, 1구간 이하)", min_value=0.0, step=0.1, format="%.1f", key="g_acq_rate_min")
+        acq_rate_max = st.number_input("최고 취득세율 (%, 2구간 초과)", min_value=0.0, step=0.1, format="%.1f", key="g_acq_rate_max")
+        edu_tax_ratio = st.number_input("지방교육세율 (취득세율 대비 %)", min_value=0.0, step=1.0, format="%.1f", key="g_edu_tax_ratio")
 
         st.markdown("**보유세(재산세·종합부동산세 등) 근사 실효세율**")
         st.caption(
@@ -1092,7 +1241,7 @@ with st.sidebar:
             "매매가 대비 연간 실효세율(%) 하나로 근사합니다. 최신 고시 공정시장가액비율·세율을 반영해 조정하세요."
         )
         holding_tax_rate = st.number_input(
-            "보유세 실효세율 (연, % of 매매가)", min_value=0.0, value=0.15, step=0.01, format="%.2f",
+            "보유세 실효세율 (연, % of 매매가)", min_value=0.0, step=0.01, format="%.2f", key="g_holding_tax_rate",
         )
 
 g_inputs = dict(
@@ -1307,12 +1456,19 @@ with tab_analyze:
                 "price_growth_rate": st.session_state.f_price_growth_rate,
                 "mortgage_rate": st.session_state.f_mortgage_rate,
                 "renovation_cost": st.session_state.f_renovation_cost,
+                "sale_brokerage_fee": st.session_state.f_sale_brokerage_fee,
+                "sale_brokerage_included": st.session_state.f_sale_brokerage_included,
                 "jeonse_deposit": st.session_state.f_jeonse_deposit,
                 "jeonse_loan_rate": st.session_state.f_jeonse_loan_rate,
+                "jeonse_brokerage_fee": st.session_state.f_jeonse_brokerage_fee,
+                "jeonse_brokerage_included": st.session_state.f_jeonse_brokerage_included,
                 "wolse_deposit": st.session_state.f_wolse_deposit,
                 "wolse_monthly": st.session_state.f_wolse_monthly,
                 "wolse_loan_rate": st.session_state.f_wolse_loan_rate,
+                "wolse_brokerage_fee": st.session_state.f_wolse_brokerage_fee,
+                "wolse_brokerage_included": st.session_state.f_wolse_brokerage_included,
                 "saved_at": saved_at,
+                **{g_key: st.session_state[f"g_{g_key}"] for g_key in GLOBAL_SETTING_KEYS},
             }
             st.session_state.pending_select_id = new_pid
             if gsheet_enabled():
@@ -1348,6 +1504,7 @@ with tab_analyze:
             st.number_input("주택담보대출 금리 (%)", min_value=0.0, step=0.1, format="%.1f", key="f_mortgage_rate")
             st.number_input("수리/인테리어비 (만원)", min_value=0, step=100, key="f_renovation_cost")
             money_hint(st.session_state.f_renovation_cost)
+            brokerage_fee_control(st.session_state.f_sale_price, "sale", "f_sale_brokerage_fee", "f_sale_brokerage_included")
 
     with col_jeonse:
         with st.container(border=True):
@@ -1355,6 +1512,7 @@ with tab_analyze:
             st.number_input("전세 보증금 (만원)", min_value=0, step=1000, key="f_jeonse_deposit")
             money_hint(st.session_state.f_jeonse_deposit)
             st.number_input("전세자금대출 금리 (%)", min_value=0.0, step=0.1, format="%.1f", key="f_jeonse_loan_rate")
+            brokerage_fee_control(st.session_state.f_jeonse_deposit, "lease", "f_jeonse_brokerage_fee", "f_jeonse_brokerage_included")
 
             jeonse_ratio = safe_div(st.session_state.f_jeonse_deposit, st.session_state.f_sale_price)
             if jeonse_ratio > 0.8:
@@ -1371,6 +1529,8 @@ with tab_analyze:
             st.number_input("월세액 (만원)", min_value=0, step=5, key="f_wolse_monthly")
             money_hint(st.session_state.f_wolse_monthly)
             st.number_input("보증금 대출금리 (%)", min_value=0.0, step=0.1, format="%.1f", key="f_wolse_loan_rate")
+            _wolse_conv_amount = wolse_conversion_amount(st.session_state.f_wolse_deposit, st.session_state.f_wolse_monthly)
+            brokerage_fee_control(_wolse_conv_amount, "lease", "f_wolse_brokerage_fee", "f_wolse_brokerage_included")
 
     # ----- 현재 입력값 기준 계산 -----
     p_inputs = dict(
@@ -1378,15 +1538,18 @@ with tab_analyze:
         price_growth_rate=st.session_state.f_price_growth_rate,
         mortgage_rate=st.session_state.f_mortgage_rate,
         renovation_cost=st.session_state.f_renovation_cost,
+        brokerage_fee=st.session_state.f_sale_brokerage_fee if st.session_state.f_sale_brokerage_included else 0,
     )
     j_inputs = dict(
         jeonse_deposit=st.session_state.f_jeonse_deposit,
         jeonse_loan_rate=st.session_state.f_jeonse_loan_rate,
+        brokerage_fee=st.session_state.f_jeonse_brokerage_fee if st.session_state.f_jeonse_brokerage_included else 0,
     )
     w_inputs = dict(
         wolse_deposit=st.session_state.f_wolse_deposit,
         wolse_monthly=st.session_state.f_wolse_monthly,
         wolse_loan_rate=st.session_state.f_wolse_loan_rate,
+        brokerage_fee=st.session_state.f_wolse_brokerage_fee if st.session_state.f_wolse_brokerage_included else 0,
     )
 
     g_calc = dict(g_inputs, monthly_mgmt_fee=st.session_state.f_monthly_mgmt_fee)
@@ -1486,6 +1649,63 @@ with tab_analyze:
             """
         )
 
+@st.dialog("⚙️ 설정값 상세보기", width="large")
+def show_settings_dialog(pid: str, prop: dict, calc_bundle: tuple) -> None:
+    """저장된 물건 하나의 공통 설정값·매매/전세/월세 조건을 전부 보여주는 팝업"""
+    g_calc, p_i, j_i, w_i, p_detail, j_detail, w_detail = calc_bundle
+    st.markdown(f"### {prop['name']}" + (f" {prop.get('dong', '')}" if prop.get("dong") else ""))
+    st.caption(
+        f"저장 시각: {prop.get('saved_at', '-')} · 지역: {prop.get('region_label', '-')} · "
+        f"평수: {prop.get('size_pyeong', 0):.1f}평 · 월관리비: {fmt_money(prop.get('monthly_mgmt_fee', 0))}"
+    )
+    if prop.get("note"):
+        st.caption(f"비고: {prop['note']}")
+
+    st.markdown("**🌐 공통 설정값 (이 물건을 저장한 시점의 스냅샷 — 사이드바 현재 값이 아닙니다)**")
+    gcol1, gcol2 = st.columns(2)
+    with gcol1:
+        st.write(f"- 보유 자금: {fmt_money(g_calc['own_capital'])}")
+        st.write(f"- 거주 예정 기간: {g_calc['target_period']:.1f}년")
+        st.write(f"- 자기자본 기회비용률: {g_calc['opportunity_rate']:.1f}%")
+        st.write(f"- 물가/임대료 상승률: {g_calc['inflation_rate']:.1f}%")
+        st.write(f"- 이사비: {fmt_money(g_calc['moving_cost'])}")
+        st.write(f"- 청소비: {fmt_money(g_calc['cleaning_cost'])}")
+    with gcol2:
+        st.write(f"- 취득세 구간: {g_calc['acq_threshold1']/10000:.1f}억 / {g_calc['acq_threshold2']/10000:.1f}억")
+        st.write(f"- 취득세율: {g_calc['acq_rate_min']:.1f}% ~ {g_calc['acq_rate_max']:.1f}%")
+        st.write(f"- 지방교육세율: {g_calc['edu_tax_ratio']:.1f}%")
+        st.write(f"- 보유세 실효세율: {g_calc['holding_tax_rate']:.2f}%")
+
+    st.divider()
+    dtab_s, dtab_j, dtab_w = st.tabs(["🏠 매매", "🏢 전세", "🔑 월세"])
+    with dtab_s:
+        included = prop.get("sale_brokerage_included", True)
+        fee_note = "" if included else " (미포함 — 계산에서 제외됨)"
+        st.write(f"- 매매가: {fmt_money(p_i['sale_price'])}")
+        st.write(f"- 예상 연간 상승률: {p_i['price_growth_rate']:.1f}%")
+        st.write(f"- 대출금리: {p_i['mortgage_rate']:.1f}%")
+        st.write(f"- 수리/인테리어비: {fmt_money(p_i['renovation_cost'])}")
+        st.write(f"- 중개료: {fmt_money(prop.get('sale_brokerage_fee', 0))}{fee_note}")
+        st.metric("매매 순비용", fmt_money(p_detail["순비용"]))
+    with dtab_j:
+        included = prop.get("jeonse_brokerage_included", True)
+        fee_note = "" if included else " (미포함 — 계산에서 제외됨)"
+        st.write(f"- 전세보증금: {fmt_money(j_i['jeonse_deposit'])}")
+        st.write(f"- 전세대출 금리: {j_i['jeonse_loan_rate']:.1f}%")
+        st.write(f"- 중개료: {fmt_money(prop.get('jeonse_brokerage_fee', 0))}{fee_note}")
+        st.metric("전세 순비용", fmt_money(j_detail["순비용"]))
+    with dtab_w:
+        included = prop.get("wolse_brokerage_included", True)
+        fee_note = "" if included else " (미포함 — 계산에서 제외됨)"
+        st.write(f"- 월세보증금: {fmt_money(w_i['wolse_deposit'])}")
+        st.write(f"- 월세액: {fmt_money(w_i['wolse_monthly'])}")
+        st.write(f"- 보증금대출 금리: {w_i['wolse_loan_rate']:.1f}%")
+        st.write(f"- 중개료: {fmt_money(prop.get('wolse_brokerage_fee', 0))}{fee_note}")
+        st.metric("월세 순비용", fmt_money(w_detail["순비용"]))
+
+    st.caption("💡 이 설정값을 다시 불러와 조정하려면 '🏢 물건 분석' 탭에서 이 물건을 선택하세요.")
+
+
 # --------------------------------------------------------------------------------------
 # 탭 2. 물건 비교 — 저장된 여러 물건의 매매/전세/월세 순비용 종합 비교
 # --------------------------------------------------------------------------------------
@@ -1507,26 +1727,36 @@ with tab_compare:
         st.info("아직 저장된 물건이 없습니다. '🏢 물건 분석' 탭에서 물건 정보를 입력한 뒤 '💾 이 물건 저장' 버튼을 눌러주세요.")
     else:
         rows = []
+        row_calc_cache = {}  # pid -> (g_calc, p_i, j_i, w_i, purchase/jeonse/wolse detail) for the 설정값 팝업
         for pid, prop in props.items():
             p_i = dict(
                 sale_price=prop["sale_price"], price_growth_rate=prop["price_growth_rate"],
                 mortgage_rate=prop["mortgage_rate"], renovation_cost=prop["renovation_cost"],
+                brokerage_fee=prop.get("sale_brokerage_fee") if prop.get("sale_brokerage_included", True) else 0,
             )
-            j_i = dict(jeonse_deposit=prop["jeonse_deposit"], jeonse_loan_rate=prop["jeonse_loan_rate"])
+            j_i = dict(
+                jeonse_deposit=prop["jeonse_deposit"], jeonse_loan_rate=prop["jeonse_loan_rate"],
+                brokerage_fee=prop.get("jeonse_brokerage_fee") if prop.get("jeonse_brokerage_included", True) else 0,
+            )
             w_i = dict(
                 wolse_deposit=prop["wolse_deposit"], wolse_monthly=prop["wolse_monthly"],
                 wolse_loan_rate=prop["wolse_loan_rate"],
+                brokerage_fee=prop.get("wolse_brokerage_fee") if prop.get("wolse_brokerage_included", True) else 0,
             )
-            g_calc = dict(g_inputs, monthly_mgmt_fee=prop.get("monthly_mgmt_fee", 15))
-            pn, _, _ = calc_purchase(g_calc, p_i)
-            jn, _, _ = calc_jeonse(g_calc, j_i)
-            wn, _, _ = calc_wolse(g_calc, w_i)
+            # 저장 당시의 공통 설정값 스냅샷을 그대로 사용 (현재 사이드바 값이 아니라 그 물건 저장 시점 기준)
+            g_calc = {g_key: prop.get(g_key, g_inputs[g_key]) for g_key in GLOBAL_SETTING_KEYS}
+            g_calc["monthly_mgmt_fee"] = prop.get("monthly_mgmt_fee", 15)
+            pn, _, p_detail = calc_purchase(g_calc, p_i)
+            jn, _, j_detail = calc_jeonse(g_calc, j_i)
+            wn, _, w_detail = calc_wolse(g_calc, w_i)
+            row_calc_cache[pid] = (g_calc, p_i, j_i, w_i, p_detail, j_detail, w_detail)
 
             opt_costs = {"매매": pn, "전세": jn, "월세": wn}
             best = min(opt_costs, key=opt_costs.get)
             jr = safe_div(prop["jeonse_deposit"], prop["sale_price"])
 
             rows.append({
+                "pid": pid,
                 "물건명": prop["name"], "동": prop.get("dong", ""), "평수": prop["size_pyeong"],
                 "월관리비": prop.get("monthly_mgmt_fee", 15), "비고": prop["note"],
                 "최근입력일": prop.get("saved_at", ""),
@@ -1547,12 +1777,23 @@ with tab_compare:
             names = ", ".join(risky["물건명"].tolist())
             st.warning(f"⚠️ 전세가율 80% 초과 물건: {names} — 역전세/보증금 미반환 리스크를 확인하세요.")
 
-        display_comp = comp_df.copy()
+        display_comp = comp_df.drop(columns=["pid"]).copy()
         display_comp["평수"] = display_comp["평수"].map(lambda v: f"{v:.1f}")
         display_comp["전세가율(%)"] = display_comp["전세가율(%)"].map(lambda v: f"{v:.1f}%")
         for c in ["매매 순비용", "전세 순비용", "월세 순비용", "최적 순비용"]:
             display_comp[c] = display_comp[c].round(0).map(lambda v: f"{v:,.0f}")
         st.dataframe(display_comp, use_container_width=True, hide_index=True)
+
+        st.markdown("**⚙️ 설정값 상세보기** — 각 물건이 저장될 당시의 공통 설정·매매/전세/월세 조건을 모두 확인합니다.")
+        for _, row in comp_df.iterrows():
+            pid = row["pid"]
+            prop = props[pid]
+            scol1, scol2 = st.columns([5, 1.3])
+            with scol1:
+                st.write(f"{row['물건명']}" + (f" {row['동']}" if row["동"] else "") + f" · 최적 {row['최적옵션']} {fmt_money(row['최적 순비용'])}")
+            with scol2:
+                if st.button("⚙️ 설정값", key=f"settings_btn_{pid}", use_container_width=True):
+                    show_settings_dialog(pid, prop, row_calc_cache[pid])
 
         st.subheader("📊 물건별 매매·전세·월세 순비용 비교")
         fig = go.Figure()
