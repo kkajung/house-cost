@@ -710,14 +710,16 @@ PROPERTY_COLUMNS = [
     "monthly_mgmt_fee", "sale_price", "price_growth_rate", "mortgage_rate", "renovation_cost",
     "jeonse_deposit", "jeonse_loan_rate", "wolse_deposit", "wolse_monthly", "wolse_loan_rate",
 ]
+_GSHEET_DEBUG = {"error": None}  # 마지막 연결 실패 사유를 UI에 노출해 진단을 돕는다 (민감정보 아님)
 
 
 @st.cache_resource(show_spinner=False)
 def _get_gsheet_worksheet():
-    """Google Sheets 연결 (연결 객체는 세션 동안 재사용). 시크릿이 없으면 None."""
+    """Google Sheets 연결 (연결 객체는 세션 동안 재사용). 시크릿이 없거나 연결 실패 시 None."""
     sa_info = get_secret("gcp_service_account")
     sheet_id = get_secret("GSHEET_ID")
     if not sa_info or not sheet_id:
+        _GSHEET_DEBUG["error"] = "GSHEET_ID 또는 [gcp_service_account] 시크릿이 비어 있습니다."
         return None
     try:
         import gspread
@@ -731,8 +733,10 @@ def _get_gsheet_worksheet():
         except gspread.WorksheetNotFound:
             ws = sh.add_worksheet(title="properties", rows=1000, cols=len(PROPERTY_COLUMNS))
             ws.append_row(PROPERTY_COLUMNS)
+        _GSHEET_DEBUG["error"] = None
         return ws
-    except Exception:
+    except Exception as e:
+        _GSHEET_DEBUG["error"] = f"{type(e).__name__}: {e}"
         return None
 
 
@@ -980,6 +984,8 @@ with tab_analyze:
         st.caption("🔗 공유 저장소(Google Sheets) 연동됨 — 다른 기기에서 저장한 물건도 새로고침하면 보입니다.")
     else:
         st.caption("⚠️ 공유 저장소가 연동되지 않아 이 브라우저에만 저장됩니다. (secrets.toml에 GSHEET 설정 필요)")
+        if _GSHEET_DEBUG.get("error"):
+            st.caption(f"🔍 진단: {_GSHEET_DEBUG['error']}")
 
     pid_options = [NEW_PROPERTY_ID] + list(st.session_state.properties.keys())
     st.selectbox(
