@@ -1,0 +1,1276 @@
+{
+  "530096": {
+    "sgg_code": "28125",
+    "cls_nm": "제물포구",
+    "cls_fullnm": "인천>제물포구",
+    "matched_name": "제물포구",
+    "province": "인천광역시"
+  },
+  "530045": {
+    "sgg_code": "41171",
+    "cls_nm": "만안구",
+    "cls_fullnm": "경기>경부1권>안양시>만안구",
+    "matched_name": "안양시만안구",
+    "province": "경기도"
+  },
+  "530011": {
+    "sgg_code": "11110",
+    "cls_nm": "종로구",
+    "cls_fullnm": "서울>강북지역>도심권>종로구",
+    "matched_name": "종로구",
+    "province": "서울특별시"
+  },
+  "520171": {
+    "sgg_code": "48121",
+    "cls_nm": "의창구",
+    "cls_fullnm": "경남>창원시>의창구",
+    "matched_name": "창원시의창구",
+    "province": "경상남도"
+  },
+  "520157": {
+    "sgg_code": "47111",
+    "cls_nm": "남구",
+    "cls_fullnm": "경북>포항시>남구",
+    "matched_name": "포항시남구",
+    "province": "경상북도"
+  },
+  "520141": {
+    "sgg_code": "52111",
+    "cls_nm": "완산구",
+    "cls_fullnm": "전북>전주시>완산구",
+    "matched_name": "전주시완산구",
+    "province": "전북특별자치도"
+  },
+  "520128": {
+    "sgg_code": "44131",
+    "cls_nm": "동남구",
+    "cls_fullnm": "충남>천안시>동남구",
+    "matched_name": "천안시동남구",
+    "province": "충청남도"
+  },
+  "520119": {
+    "sgg_code": "43111",
+    "cls_nm": "상당구",
+    "cls_fullnm": "충북>청주시>상당구",
+    "matched_name": "청주시상당구",
+    "province": "충청북도"
+  },
+  "520063": {
+    "sgg_code": "26110",
+    "cls_nm": "중구",
+    "cls_fullnm": "부산>중부산권>중구",
+    "matched_name": "중구",
+    "province": "부산광역시"
+  },
+  "520018": {
+    "sgg_code": "41290",
+    "cls_nm": "과천시",
+    "cls_fullnm": "경기>경부1권>과천시",
+    "matched_name": "과천시",
+    "province": "경기도"
+  },
+  "510120": {
+    "sgg_code": "50110",
+    "cls_nm": "제주시",
+    "cls_fullnm": "제주>제주시",
+    "matched_name": "제주시",
+    "province": "제주특별자치도"
+  },
+  "510092": {
+    "sgg_code": "12110",
+    "cls_nm": "목포시",
+    "cls_fullnm": "전남광주>전남>목포시",
+    "matched_name": "목포시",
+    "province": "전남광주통합특별시"
+  },
+  "510061": {
+    "sgg_code": "51110",
+    "cls_nm": "춘천시",
+    "cls_fullnm": "강원>춘천시",
+    "matched_name": "춘천시",
+    "province": "강원특별자치도"
+  },
+  "510054": {
+    "sgg_code": "31110",
+    "cls_nm": "중구",
+    "cls_fullnm": "울산>중구",
+    "matched_name": "중구",
+    "province": "울산광역시"
+  },
+  "510048": {
+    "sgg_code": "30110",
+    "cls_nm": "동구",
+    "cls_fullnm": "대전>동구",
+    "matched_name": "동구",
+    "province": "대전광역시"
+  },
+  "510033": {
+    "sgg_code": "27110",
+    "cls_nm": "중구",
+    "cls_fullnm": "대구>중구",
+    "matched_name": "중구",
+    "province": "대구광역시"
+  },
+  "510100": {
+    "sgg_code": "47130",
+    "cls_nm": "경주시",
+    "cls_fullnm": "경북>경주시",
+    "matched_name": "경주시",
+    "province": "경상북도"
+  },
+  "510093": {
+    "sgg_code": "12130",
+    "cls_nm": "여수시",
+    "cls_fullnm": "전남광주>전남>여수시",
+    "matched_name": "여수시",
+    "province": "전남광주통합특별시"
+  },
+  "520120": {
+    "sgg_code": "43112",
+    "cls_nm": "서원구",
+    "cls_fullnm": "충북>청주시>서원구",
+    "matched_name": "청주시서원구",
+    "province": "충청북도"
+  },
+  "510086": {
+    "sgg_code": "52130",
+    "cls_nm": "군산시",
+    "cls_fullnm": "전북>군산시",
+    "matched_name": "군산시",
+    "province": "전북특별자치도"
+  },
+  "520158": {
+    "sgg_code": "47113",
+    "cls_nm": "북구",
+    "cls_fullnm": "경북>포항시>북구",
+    "matched_name": "포항시북구",
+    "province": "경상북도"
+  },
+  "510075": {
+    "sgg_code": "44150",
+    "cls_nm": "공주시",
+    "cls_fullnm": "충남>공주시",
+    "matched_name": "공주시",
+    "province": "충청남도"
+  },
+  "520064": {
+    "sgg_code": "26140",
+    "cls_nm": "서구",
+    "cls_fullnm": "부산>중부산권>서구",
+    "matched_name": "서구",
+    "province": "부산광역시"
+  },
+  "510070": {
+    "sgg_code": "43130",
+    "cls_nm": "충주시",
+    "cls_fullnm": "충북>충주시",
+    "matched_name": "충주시",
+    "province": "충청북도"
+  },
+  "530046": {
+    "sgg_code": "41173",
+    "cls_nm": "동안구",
+    "cls_fullnm": "경기>경부1권>안양시>동안구",
+    "matched_name": "안양시동안구",
+    "province": "경기도"
+  },
+  "510062": {
+    "sgg_code": "51130",
+    "cls_nm": "원주시",
+    "cls_fullnm": "강원>원주시",
+    "matched_name": "원주시",
+    "province": "강원특별자치도"
+  },
+  "510055": {
+    "sgg_code": "31140",
+    "cls_nm": "남구",
+    "cls_fullnm": "울산>남구",
+    "matched_name": "남구",
+    "province": "울산광역시"
+  },
+  "520142": {
+    "sgg_code": "52113",
+    "cls_nm": "덕진구",
+    "cls_fullnm": "전북>전주시>덕진구",
+    "matched_name": "전주시덕진구",
+    "province": "전북특별자치도"
+  },
+  "510049": {
+    "sgg_code": "30140",
+    "cls_nm": "중구",
+    "cls_fullnm": "대전>중구",
+    "matched_name": "중구",
+    "province": "대전광역시"
+  },
+  "510034": {
+    "sgg_code": "27140",
+    "cls_nm": "동구",
+    "cls_fullnm": "대구>동구",
+    "matched_name": "동구",
+    "province": "대구광역시"
+  },
+  "520172": {
+    "sgg_code": "48123",
+    "cls_nm": "성산구",
+    "cls_fullnm": "경남>창원시>성산구",
+    "matched_name": "창원시성산구",
+    "province": "경상남도"
+  },
+  "510121": {
+    "sgg_code": "50130",
+    "cls_nm": "서귀포시",
+    "cls_fullnm": "제주>서귀포시",
+    "matched_name": "서귀포시",
+    "province": "제주특별자치도"
+  },
+  "520129": {
+    "sgg_code": "44133",
+    "cls_nm": "서북구",
+    "cls_fullnm": "충남>천안시>서북구",
+    "matched_name": "천안시서북구",
+    "province": "충청남도"
+  },
+  "510112": {
+    "sgg_code": "48170",
+    "cls_nm": "진주시",
+    "cls_fullnm": "경남>진주시",
+    "matched_name": "진주시",
+    "province": "경상남도"
+  },
+  "530012": {
+    "sgg_code": "11140",
+    "cls_nm": "중구",
+    "cls_fullnm": "서울>강북지역>도심권>중구",
+    "matched_name": "중구",
+    "province": "서울특별시"
+  },
+  "530097": {
+    "sgg_code": "28155",
+    "cls_nm": "영종구",
+    "cls_fullnm": "인천>영종구",
+    "matched_name": "영종구",
+    "province": "인천광역시"
+  },
+  "510035": {
+    "sgg_code": "27170",
+    "cls_nm": "서구",
+    "cls_fullnm": "대구>서구",
+    "matched_name": "서구",
+    "province": "대구광역시"
+  },
+  "510050": {
+    "sgg_code": "30170",
+    "cls_nm": "서구",
+    "cls_fullnm": "대전>서구",
+    "matched_name": "서구",
+    "province": "대전광역시"
+  },
+  "510056": {
+    "sgg_code": "31170",
+    "cls_nm": "동구",
+    "cls_fullnm": "울산>동구",
+    "matched_name": "동구",
+    "province": "울산광역시"
+  },
+  "510063": {
+    "sgg_code": "51150",
+    "cls_nm": "강릉시",
+    "cls_fullnm": "강원>강릉시",
+    "matched_name": "강릉시",
+    "province": "강원특별자치도"
+  },
+  "510071": {
+    "sgg_code": "43150",
+    "cls_nm": "제천시",
+    "cls_fullnm": "충북>제천시",
+    "matched_name": "제천시",
+    "province": "충청북도"
+  },
+  "510076": {
+    "sgg_code": "44180",
+    "cls_nm": "보령시",
+    "cls_fullnm": "충남>보령시",
+    "matched_name": "보령시",
+    "province": "충청남도"
+  },
+  "510087": {
+    "sgg_code": "52140",
+    "cls_nm": "익산시",
+    "cls_fullnm": "전북>익산시",
+    "matched_name": "익산시",
+    "province": "전북특별자치도"
+  },
+  "510094": {
+    "sgg_code": "12150",
+    "cls_nm": "순천시",
+    "cls_fullnm": "전남광주>전남>순천시",
+    "matched_name": "순천시",
+    "province": "전남광주통합특별시"
+  },
+  "510101": {
+    "sgg_code": "47150",
+    "cls_nm": "김천시",
+    "cls_fullnm": "경북>김천시",
+    "matched_name": "김천시",
+    "province": "경상북도"
+  },
+  "510113": {
+    "sgg_code": "48220",
+    "cls_nm": "통영시",
+    "cls_fullnm": "경남>통영시",
+    "matched_name": "통영시",
+    "province": "경상남도"
+  },
+  "520065": {
+    "sgg_code": "26170",
+    "cls_nm": "동구",
+    "cls_fullnm": "부산>중부산권>동구",
+    "matched_name": "동구",
+    "province": "부산광역시"
+  },
+  "520121": {
+    "sgg_code": "43113",
+    "cls_nm": "흥덕구",
+    "cls_fullnm": "충북>청주시>흥덕구",
+    "matched_name": "청주시흥덕구",
+    "province": "충청북도"
+  },
+  "520173": {
+    "sgg_code": "48125",
+    "cls_nm": "마산합포구",
+    "cls_fullnm": "경남>창원시>마산합포구",
+    "matched_name": "창원시마산합포구",
+    "province": "경상남도"
+  },
+  "530013": {
+    "sgg_code": "11170",
+    "cls_nm": "용산구",
+    "cls_fullnm": "서울>강북지역>도심권>용산구",
+    "matched_name": "용산구",
+    "province": "서울특별시"
+  },
+  "530048": {
+    "sgg_code": "41131",
+    "cls_nm": "수정구",
+    "cls_fullnm": "경기>경부1권>성남시>수정구",
+    "matched_name": "성남시수정구",
+    "province": "경기도"
+  },
+  "510036": {
+    "sgg_code": "27200",
+    "cls_nm": "남구",
+    "cls_fullnm": "대구>남구",
+    "matched_name": "남구",
+    "province": "대구광역시"
+  },
+  "510088": {
+    "sgg_code": "52180",
+    "cls_nm": "정읍시",
+    "cls_fullnm": "전북>정읍시",
+    "matched_name": "정읍시",
+    "province": "전북특별자치도"
+  },
+  "510051": {
+    "sgg_code": "30200",
+    "cls_nm": "유성구",
+    "cls_fullnm": "대전>유성구",
+    "matched_name": "유성구",
+    "province": "대전광역시"
+  },
+  "510102": {
+    "sgg_code": "47170",
+    "cls_nm": "안동시",
+    "cls_fullnm": "경북>안동시",
+    "matched_name": "안동시",
+    "province": "경상북도"
+  },
+  "510057": {
+    "sgg_code": "31200",
+    "cls_nm": "북구",
+    "cls_fullnm": "울산>북구",
+    "matched_name": "북구",
+    "province": "울산광역시"
+  },
+  "510064": {
+    "sgg_code": "51170",
+    "cls_nm": "동해시",
+    "cls_fullnm": "강원>동해시",
+    "matched_name": "동해시",
+    "province": "강원특별자치도"
+  },
+  "510095": {
+    "sgg_code": "12170",
+    "cls_nm": "나주시",
+    "cls_fullnm": "전남광주>전남>나주시",
+    "matched_name": "나주시",
+    "province": "전남광주통합특별시"
+  },
+  "510077": {
+    "sgg_code": "44200",
+    "cls_nm": "아산시",
+    "cls_fullnm": "충남>아산시",
+    "matched_name": "아산시",
+    "province": "충청남도"
+  },
+  "520066": {
+    "sgg_code": "26200",
+    "cls_nm": "영도구",
+    "cls_fullnm": "부산>중부산권>영도구",
+    "matched_name": "영도구",
+    "province": "부산광역시"
+  },
+  "510114": {
+    "sgg_code": "48240",
+    "cls_nm": "사천시",
+    "cls_fullnm": "경남>사천시",
+    "matched_name": "사천시",
+    "province": "경상남도"
+  },
+  "510072": {
+    "sgg_code": "43770",
+    "cls_nm": "음성군",
+    "cls_fullnm": "충북>음성군",
+    "matched_name": "음성군",
+    "province": "충청북도"
+  },
+  "520122": {
+    "sgg_code": "43114",
+    "cls_nm": "청원구",
+    "cls_fullnm": "충북>청주시>청원구",
+    "matched_name": "청주시청원구",
+    "province": "충청북도"
+  },
+  "520174": {
+    "sgg_code": "48127",
+    "cls_nm": "마산회원구",
+    "cls_fullnm": "경남>창원시>마산회원구",
+    "matched_name": "창원시마산회원구",
+    "province": "경상남도"
+  },
+  "530049": {
+    "sgg_code": "41133",
+    "cls_nm": "중원구",
+    "cls_fullnm": "경기>경부1권>성남시>중원구",
+    "matched_name": "성남시중원구",
+    "province": "경기도"
+  },
+  "530015": {
+    "sgg_code": "11200",
+    "cls_nm": "성동구",
+    "cls_fullnm": "서울>강북지역>동북권>성동구",
+    "matched_name": "성동구",
+    "province": "서울특별시"
+  },
+  "520021": {
+    "sgg_code": "41410",
+    "cls_nm": "군포시",
+    "cls_fullnm": "경기>경부1권>군포시",
+    "matched_name": "군포시",
+    "province": "경기도"
+  },
+  "510022": {
+    "sgg_code": "28177",
+    "cls_nm": "미추홀구",
+    "cls_fullnm": "인천>미추홀구",
+    "matched_name": "미추홀구",
+    "province": "인천광역시"
+  },
+  "530016": {
+    "sgg_code": "11215",
+    "cls_nm": "광진구",
+    "cls_fullnm": "서울>강북지역>동북권>광진구",
+    "matched_name": "광진구",
+    "province": "서울특별시"
+  },
+  "520175": {
+    "sgg_code": "48129",
+    "cls_nm": "진해구",
+    "cls_fullnm": "경남>창원시>진해구",
+    "matched_name": "창원시진해구",
+    "province": "경상남도"
+  },
+  "520067": {
+    "sgg_code": "26230",
+    "cls_nm": "부산진구",
+    "cls_fullnm": "부산>중부산권>부산진구",
+    "matched_name": "부산진구",
+    "province": "부산광역시"
+  },
+  "520022": {
+    "sgg_code": "41430",
+    "cls_nm": "의왕시",
+    "cls_fullnm": "경기>경부1권>의왕시",
+    "matched_name": "의왕시",
+    "province": "경기도"
+  },
+  "510115": {
+    "sgg_code": "48250",
+    "cls_nm": "김해시",
+    "cls_fullnm": "경남>김해시",
+    "matched_name": "김해시",
+    "province": "경상남도"
+  },
+  "530050": {
+    "sgg_code": "41135",
+    "cls_nm": "분당구",
+    "cls_fullnm": "경기>경부1권>성남시>분당구",
+    "matched_name": "성남시분당구",
+    "province": "경기도"
+  },
+  "510103": {
+    "sgg_code": "47190",
+    "cls_nm": "구미시",
+    "cls_fullnm": "경북>구미시",
+    "matched_name": "구미시",
+    "province": "경상북도"
+  },
+  "510096": {
+    "sgg_code": "12190",
+    "cls_nm": "광양시",
+    "cls_fullnm": "전남광주>전남>광양시",
+    "matched_name": "광양시",
+    "province": "전남광주통합특별시"
+  },
+  "510089": {
+    "sgg_code": "52190",
+    "cls_nm": "남원시",
+    "cls_fullnm": "전북>남원시",
+    "matched_name": "남원시",
+    "province": "전북특별자치도"
+  },
+  "510078": {
+    "sgg_code": "44210",
+    "cls_nm": "서산시",
+    "cls_fullnm": "충남>서산시",
+    "matched_name": "서산시",
+    "province": "충청남도"
+  },
+  "510065": {
+    "sgg_code": "51190",
+    "cls_nm": "태백시",
+    "cls_fullnm": "강원>태백시",
+    "matched_name": "태백시",
+    "province": "강원특별자치도"
+  },
+  "510058": {
+    "sgg_code": "31710",
+    "cls_nm": "울주군",
+    "cls_fullnm": "울산>울주군",
+    "matched_name": "울주군",
+    "province": "울산광역시"
+  },
+  "510052": {
+    "sgg_code": "30230",
+    "cls_nm": "대덕구",
+    "cls_fullnm": "대전>대덕구",
+    "matched_name": "대덕구",
+    "province": "대전광역시"
+  },
+  "510037": {
+    "sgg_code": "27230",
+    "cls_nm": "북구",
+    "cls_fullnm": "대구>북구",
+    "matched_name": "북구",
+    "province": "대구광역시"
+  },
+  "510066": {
+    "sgg_code": "51210",
+    "cls_nm": "속초시",
+    "cls_fullnm": "강원>속초시",
+    "matched_name": "속초시",
+    "province": "강원특별자치도"
+  },
+  "520068": {
+    "sgg_code": "26290",
+    "cls_nm": "남구",
+    "cls_fullnm": "부산>중부산권>남구",
+    "matched_name": "남구",
+    "province": "부산광역시"
+  },
+  "520024": {
+    "sgg_code": "41550",
+    "cls_nm": "안성시",
+    "cls_fullnm": "경기>경부2권>안성시",
+    "matched_name": "안성시",
+    "province": "경기도"
+  },
+  "510104": {
+    "sgg_code": "47210",
+    "cls_nm": "영주시",
+    "cls_fullnm": "경북>영주시",
+    "matched_name": "영주시",
+    "province": "경상북도"
+  },
+  "510079": {
+    "sgg_code": "44230",
+    "cls_nm": "논산시",
+    "cls_fullnm": "충남>논산시",
+    "matched_name": "논산시",
+    "province": "충청남도"
+  },
+  "530056": {
+    "sgg_code": "41461",
+    "cls_nm": "처인구",
+    "cls_fullnm": "경기>경부2권>용인시>처인구",
+    "matched_name": "용인시처인구",
+    "province": "경기도"
+  },
+  "510023": {
+    "sgg_code": "28185",
+    "cls_nm": "연수구",
+    "cls_fullnm": "인천>연수구",
+    "matched_name": "연수구",
+    "province": "인천광역시"
+  },
+  "510090": {
+    "sgg_code": "52210",
+    "cls_nm": "김제시",
+    "cls_fullnm": "전북>김제시",
+    "matched_name": "김제시",
+    "province": "전북특별자치도"
+  },
+  "510097": {
+    "sgg_code": "12810",
+    "cls_nm": "무안군",
+    "cls_fullnm": "전남광주>전남>무안군",
+    "matched_name": "무안군",
+    "province": "전남광주통합특별시"
+  },
+  "510038": {
+    "sgg_code": "27260",
+    "cls_nm": "수성구",
+    "cls_fullnm": "대구>수성구",
+    "matched_name": "수성구",
+    "province": "대구광역시"
+  },
+  "510116": {
+    "sgg_code": "48270",
+    "cls_nm": "밀양시",
+    "cls_fullnm": "경남>밀양시",
+    "matched_name": "밀양시",
+    "province": "경상남도"
+  },
+  "530017": {
+    "sgg_code": "11230",
+    "cls_nm": "동대문구",
+    "cls_fullnm": "서울>강북지역>동북권>동대문구",
+    "matched_name": "동대문구",
+    "province": "서울특별시"
+  },
+  "530057": {
+    "sgg_code": "41463",
+    "cls_nm": "기흥구",
+    "cls_fullnm": "경기>경부2권>용인시>기흥구",
+    "matched_name": "용인시기흥구",
+    "province": "경기도"
+  },
+  "510117": {
+    "sgg_code": "48310",
+    "cls_nm": "거제시",
+    "cls_fullnm": "경남>거제시",
+    "matched_name": "거제시",
+    "province": "경상남도"
+  },
+  "520069": {
+    "sgg_code": "26470",
+    "cls_nm": "연제구",
+    "cls_fullnm": "부산>중부산권>연제구",
+    "matched_name": "연제구",
+    "province": "부산광역시"
+  },
+  "530018": {
+    "sgg_code": "11260",
+    "cls_nm": "중랑구",
+    "cls_fullnm": "서울>강북지역>동북권>중랑구",
+    "matched_name": "중랑구",
+    "province": "서울특별시"
+  },
+  "510024": {
+    "sgg_code": "28200",
+    "cls_nm": "남동구",
+    "cls_fullnm": "인천>남동구",
+    "matched_name": "남동구",
+    "province": "인천광역시"
+  },
+  "510039": {
+    "sgg_code": "27290",
+    "cls_nm": "달서구",
+    "cls_fullnm": "대구>달서구",
+    "matched_name": "달서구",
+    "province": "대구광역시"
+  },
+  "510042": {
+    "sgg_code": "12210",
+    "cls_nm": "동구",
+    "cls_fullnm": "전남광주>광주>동구",
+    "matched_name": "동구",
+    "province": "전남광주통합특별시"
+  },
+  "510067": {
+    "sgg_code": "51230",
+    "cls_nm": "삼척시",
+    "cls_fullnm": "강원>삼척시",
+    "matched_name": "삼척시",
+    "province": "강원특별자치도"
+  },
+  "510080": {
+    "sgg_code": "44250",
+    "cls_nm": "계룡시",
+    "cls_fullnm": "충남>계룡시",
+    "matched_name": "계룡시",
+    "province": "충청남도"
+  },
+  "510105": {
+    "sgg_code": "47230",
+    "cls_nm": "영천시",
+    "cls_fullnm": "경북>영천시",
+    "matched_name": "영천시",
+    "province": "경상북도"
+  },
+  "530058": {
+    "sgg_code": "41465",
+    "cls_nm": "수지구",
+    "cls_fullnm": "경기>경부2권>용인시>수지구",
+    "matched_name": "용인시수지구",
+    "province": "경기도"
+  },
+  "510106": {
+    "sgg_code": "47250",
+    "cls_nm": "상주시",
+    "cls_fullnm": "경북>상주시",
+    "matched_name": "상주시",
+    "province": "경상북도"
+  },
+  "510118": {
+    "sgg_code": "48330",
+    "cls_nm": "양산시",
+    "cls_fullnm": "경남>양산시",
+    "matched_name": "양산시",
+    "province": "경상남도"
+  },
+  "520070": {
+    "sgg_code": "26500",
+    "cls_nm": "수영구",
+    "cls_fullnm": "부산>중부산권>수영구",
+    "matched_name": "수영구",
+    "province": "부산광역시"
+  },
+  "510081": {
+    "sgg_code": "44800",
+    "cls_nm": "홍성군",
+    "cls_fullnm": "충남>홍성군",
+    "matched_name": "홍성군",
+    "province": "충청남도"
+  },
+  "510025": {
+    "sgg_code": "28237",
+    "cls_nm": "부평구",
+    "cls_fullnm": "인천>부평구",
+    "matched_name": "부평구",
+    "province": "인천광역시"
+  },
+  "510040": {
+    "sgg_code": "27710",
+    "cls_nm": "달성군",
+    "cls_fullnm": "대구>달성군",
+    "matched_name": "달성군",
+    "province": "대구광역시"
+  },
+  "510043": {
+    "sgg_code": "12240",
+    "cls_nm": "서구",
+    "cls_fullnm": "전남광주>광주>서구",
+    "matched_name": "서구",
+    "province": "전남광주통합특별시"
+  },
+  "530019": {
+    "sgg_code": "11290",
+    "cls_nm": "성북구",
+    "cls_fullnm": "서울>강북지역>동북권>성북구",
+    "matched_name": "성북구",
+    "province": "서울특별시"
+  },
+  "530060": {
+    "sgg_code": "41111",
+    "cls_nm": "장안구",
+    "cls_fullnm": "경기>경부2권>수원시>장안구",
+    "matched_name": "수원시장안구",
+    "province": "경기도"
+  },
+  "510107": {
+    "sgg_code": "47280",
+    "cls_nm": "문경시",
+    "cls_fullnm": "경북>문경시",
+    "matched_name": "문경시",
+    "province": "경상북도"
+  },
+  "510082": {
+    "sgg_code": "44810",
+    "cls_nm": "예산군",
+    "cls_fullnm": "충남>예산군",
+    "matched_name": "예산군",
+    "province": "충청남도"
+  },
+  "530020": {
+    "sgg_code": "11305",
+    "cls_nm": "강북구",
+    "cls_fullnm": "서울>강북지역>동북권>강북구",
+    "matched_name": "강북구",
+    "province": "서울특별시"
+  },
+  "510026": {
+    "sgg_code": "28245",
+    "cls_nm": "계양구",
+    "cls_fullnm": "인천>계양구",
+    "matched_name": "계양구",
+    "province": "인천광역시"
+  },
+  "510044": {
+    "sgg_code": "12270",
+    "cls_nm": "남구",
+    "cls_fullnm": "전남광주>광주>남구",
+    "matched_name": "남구",
+    "province": "전남광주통합특별시"
+  },
+  "520072": {
+    "sgg_code": "26350",
+    "cls_nm": "해운대구",
+    "cls_fullnm": "부산>동부산권>해운대구",
+    "matched_name": "해운대구",
+    "province": "부산광역시"
+  },
+  "530061": {
+    "sgg_code": "41113",
+    "cls_nm": "권선구",
+    "cls_fullnm": "경기>경부2권>수원시>권선구",
+    "matched_name": "수원시권선구",
+    "province": "경기도"
+  },
+  "510108": {
+    "sgg_code": "47290",
+    "cls_nm": "경산시",
+    "cls_fullnm": "경북>경산시",
+    "matched_name": "경산시",
+    "province": "경상북도"
+  },
+  "510083": {
+    "sgg_code": "44270",
+    "cls_nm": "당진시",
+    "cls_fullnm": "충남>당진시",
+    "matched_name": "당진시",
+    "province": "충청남도"
+  },
+  "530021": {
+    "sgg_code": "11320",
+    "cls_nm": "도봉구",
+    "cls_fullnm": "서울>강북지역>동북권>도봉구",
+    "matched_name": "도봉구",
+    "province": "서울특별시"
+  },
+  "510045": {
+    "sgg_code": "12300",
+    "cls_nm": "북구",
+    "cls_fullnm": "전남광주>광주>북구",
+    "matched_name": "북구",
+    "province": "전남광주통합특별시"
+  },
+  "520073": {
+    "sgg_code": "26410",
+    "cls_nm": "금정구",
+    "cls_fullnm": "부산>동부산권>금정구",
+    "matched_name": "금정구",
+    "province": "부산광역시"
+  },
+  "530062": {
+    "sgg_code": "41115",
+    "cls_nm": "팔달구",
+    "cls_fullnm": "경기>경부2권>수원시>팔달구",
+    "matched_name": "수원시팔달구",
+    "province": "경기도"
+  },
+  "530098": {
+    "sgg_code": "28275",
+    "cls_nm": "서해구",
+    "cls_fullnm": "인천>서해구",
+    "matched_name": "서해구",
+    "province": "인천광역시"
+  },
+  "510109": {
+    "sgg_code": "47850",
+    "cls_nm": "칠곡군",
+    "cls_fullnm": "경북>칠곡군",
+    "matched_name": "칠곡군",
+    "province": "경상북도"
+  },
+  "510046": {
+    "sgg_code": "12330",
+    "cls_nm": "광산구",
+    "cls_fullnm": "전남광주>광주>광산구",
+    "matched_name": "광산구",
+    "province": "전남광주통합특별시"
+  },
+  "520074": {
+    "sgg_code": "26260",
+    "cls_nm": "동래구",
+    "cls_fullnm": "부산>동부산권>동래구",
+    "matched_name": "동래구",
+    "province": "부산광역시"
+  },
+  "530022": {
+    "sgg_code": "11350",
+    "cls_nm": "노원구",
+    "cls_fullnm": "서울>강북지역>동북권>노원구",
+    "matched_name": "노원구",
+    "province": "서울특별시"
+  },
+  "520030": {
+    "sgg_code": "41390",
+    "cls_nm": "시흥시",
+    "cls_fullnm": "경기>서해안권>시흥시",
+    "matched_name": "시흥시",
+    "province": "경기도"
+  },
+  "530063": {
+    "sgg_code": "41117",
+    "cls_nm": "영통구",
+    "cls_fullnm": "경기>경부2권>수원시>영통구",
+    "matched_name": "수원시영통구",
+    "province": "경기도"
+  },
+  "530099": {
+    "sgg_code": "28290",
+    "cls_nm": "검단구",
+    "cls_fullnm": "인천>검단구",
+    "matched_name": "검단구",
+    "province": "인천광역시"
+  },
+  "520075": {
+    "sgg_code": "26710",
+    "cls_nm": "기장군",
+    "cls_fullnm": "부산>동부산권>기장군",
+    "matched_name": "기장군",
+    "province": "부산광역시"
+  },
+  "530024": {
+    "sgg_code": "11380",
+    "cls_nm": "은평구",
+    "cls_fullnm": "서울>강북지역>서북권>은평구",
+    "matched_name": "은평구",
+    "province": "서울특별시"
+  },
+  "520031": {
+    "sgg_code": "41210",
+    "cls_nm": "광명시",
+    "cls_fullnm": "경기>서해안권>광명시",
+    "matched_name": "광명시",
+    "province": "경기도"
+  },
+  "530088": {
+    "sgg_code": "41192",
+    "cls_nm": "원미구",
+    "cls_fullnm": "경기>서해안권>부천시>원미구",
+    "matched_name": "부천시원미구",
+    "province": "경기도"
+  },
+  "530025": {
+    "sgg_code": "11410",
+    "cls_nm": "서대문구",
+    "cls_fullnm": "서울>강북지역>서북권>서대문구",
+    "matched_name": "서대문구",
+    "province": "서울특별시"
+  },
+  "520077": {
+    "sgg_code": "26320",
+    "cls_nm": "북구",
+    "cls_fullnm": "부산>서부산권>북구",
+    "matched_name": "북구",
+    "province": "부산광역시"
+  },
+  "530089": {
+    "sgg_code": "41194",
+    "cls_nm": "소사구",
+    "cls_fullnm": "경기>서해안권>부천시>소사구",
+    "matched_name": "부천시소사구",
+    "province": "경기도"
+  },
+  "520033": {
+    "sgg_code": "41370",
+    "cls_nm": "오산시",
+    "cls_fullnm": "경기>서해안권>오산시",
+    "matched_name": "오산시",
+    "province": "경기도"
+  },
+  "530026": {
+    "sgg_code": "11440",
+    "cls_nm": "마포구",
+    "cls_fullnm": "서울>강북지역>서북권>마포구",
+    "matched_name": "마포구",
+    "province": "서울특별시"
+  },
+  "520078": {
+    "sgg_code": "26440",
+    "cls_nm": "강서구",
+    "cls_fullnm": "부산>서부산권>강서구",
+    "matched_name": "강서구",
+    "province": "부산광역시"
+  },
+  "530090": {
+    "sgg_code": "41196",
+    "cls_nm": "오정구",
+    "cls_fullnm": "경기>서해안권>부천시>오정구",
+    "matched_name": "부천시오정구",
+    "province": "경기도"
+  },
+  "520034": {
+    "sgg_code": "41220",
+    "cls_nm": "평택시",
+    "cls_fullnm": "경기>서해안권>평택시",
+    "matched_name": "평택시",
+    "province": "경기도"
+  },
+  "530029": {
+    "sgg_code": "11470",
+    "cls_nm": "양천구",
+    "cls_fullnm": "서울>강남지역>서남권>양천구",
+    "matched_name": "양천구",
+    "province": "서울특별시"
+  },
+  "520079": {
+    "sgg_code": "26530",
+    "cls_nm": "사상구",
+    "cls_fullnm": "부산>서부산권>사상구",
+    "matched_name": "사상구",
+    "province": "부산광역시"
+  },
+  "530030": {
+    "sgg_code": "11500",
+    "cls_nm": "강서구",
+    "cls_fullnm": "서울>강남지역>서남권>강서구",
+    "matched_name": "강서구",
+    "province": "서울특별시"
+  },
+  "530067": {
+    "sgg_code": "41271",
+    "cls_nm": "상록구",
+    "cls_fullnm": "경기>서해안권>안산시>상록구",
+    "matched_name": "안산시상록구",
+    "province": "경기도"
+  },
+  "500016": {
+    "sgg_code": "36110",
+    "cls_nm": "세종",
+    "cls_fullnm": "세종",
+    "matched_name": "세종시",
+    "province": "세종특별자치시"
+  },
+  "520080": {
+    "sgg_code": "26380",
+    "cls_nm": "사하구",
+    "cls_fullnm": "부산>서부산권>사하구",
+    "matched_name": "사하구",
+    "province": "부산광역시"
+  },
+  "520036": {
+    "sgg_code": "41360",
+    "cls_nm": "남양주시",
+    "cls_fullnm": "경기>동부1권>남양주시",
+    "matched_name": "남양주시",
+    "province": "경기도"
+  },
+  "530031": {
+    "sgg_code": "11530",
+    "cls_nm": "구로구",
+    "cls_fullnm": "서울>강남지역>서남권>구로구",
+    "matched_name": "구로구",
+    "province": "서울특별시"
+  },
+  "520037": {
+    "sgg_code": "41310",
+    "cls_nm": "구리시",
+    "cls_fullnm": "경기>동부1권>구리시",
+    "matched_name": "구리시",
+    "province": "경기도"
+  },
+  "530068": {
+    "sgg_code": "41273",
+    "cls_nm": "단원구",
+    "cls_fullnm": "경기>서해안권>안산시>단원구",
+    "matched_name": "안산시단원구",
+    "province": "경기도"
+  },
+  "530032": {
+    "sgg_code": "11545",
+    "cls_nm": "금천구",
+    "cls_fullnm": "서울>강남지역>서남권>금천구",
+    "matched_name": "금천구",
+    "province": "서울특별시"
+  },
+  "520038": {
+    "sgg_code": "41450",
+    "cls_nm": "하남시",
+    "cls_fullnm": "경기>동부1권>하남시",
+    "matched_name": "하남시",
+    "province": "경기도"
+  },
+  "530091": {
+    "sgg_code": "41591",
+    "cls_nm": "만세구",
+    "cls_fullnm": "경기>서해안권>화성시>만세구",
+    "matched_name": "화성시만세구",
+    "province": "경기도"
+  },
+  "530033": {
+    "sgg_code": "11560",
+    "cls_nm": "영등포구",
+    "cls_fullnm": "서울>강남지역>서남권>영등포구",
+    "matched_name": "영등포구",
+    "province": "서울특별시"
+  },
+  "520039": {
+    "sgg_code": "41610",
+    "cls_nm": "광주시",
+    "cls_fullnm": "경기>동부1권>광주시",
+    "matched_name": "광주시",
+    "province": "경기도"
+  },
+  "530092": {
+    "sgg_code": "41593",
+    "cls_nm": "효행구",
+    "cls_fullnm": "경기>서해안권>화성시>효행구",
+    "matched_name": "화성시효행구",
+    "province": "경기도"
+  },
+  "530034": {
+    "sgg_code": "11590",
+    "cls_nm": "동작구",
+    "cls_fullnm": "서울>강남지역>서남권>동작구",
+    "matched_name": "동작구",
+    "province": "서울특별시"
+  },
+  "520041": {
+    "sgg_code": "41500",
+    "cls_nm": "이천시",
+    "cls_fullnm": "경기>동부2권>이천시",
+    "matched_name": "이천시",
+    "province": "경기도"
+  },
+  "530093": {
+    "sgg_code": "41595",
+    "cls_nm": "병점구",
+    "cls_fullnm": "경기>서해안권>화성시>병점구",
+    "matched_name": "화성시병점구",
+    "province": "경기도"
+  },
+  "530035": {
+    "sgg_code": "11620",
+    "cls_nm": "관악구",
+    "cls_fullnm": "서울>강남지역>서남권>관악구",
+    "matched_name": "관악구",
+    "province": "서울특별시"
+  },
+  "520042": {
+    "sgg_code": "41670",
+    "cls_nm": "여주시",
+    "cls_fullnm": "경기>동부2권>여주시",
+    "matched_name": "여주시",
+    "province": "경기도"
+  },
+  "530094": {
+    "sgg_code": "41597",
+    "cls_nm": "동탄구",
+    "cls_fullnm": "경기>서해안권>화성시>동탄구",
+    "matched_name": "화성시동탄구",
+    "province": "경기도"
+  },
+  "530037": {
+    "sgg_code": "11650",
+    "cls_nm": "서초구",
+    "cls_fullnm": "서울>강남지역>동남권>서초구",
+    "matched_name": "서초구",
+    "province": "서울특별시"
+  },
+  "520044": {
+    "sgg_code": "41570",
+    "cls_nm": "김포시",
+    "cls_fullnm": "경기>경의권>김포시",
+    "matched_name": "김포시",
+    "province": "경기도"
+  },
+  "530085": {
+    "sgg_code": "41281",
+    "cls_nm": "덕양구",
+    "cls_fullnm": "경기>경의권>고양시>덕양구",
+    "matched_name": "고양시덕양구",
+    "province": "경기도"
+  },
+  "530038": {
+    "sgg_code": "11680",
+    "cls_nm": "강남구",
+    "cls_fullnm": "서울>강남지역>동남권>강남구",
+    "matched_name": "강남구",
+    "province": "서울특별시"
+  },
+  "530086": {
+    "sgg_code": "41285",
+    "cls_nm": "일산동구",
+    "cls_fullnm": "경기>경의권>고양시>일산동구",
+    "matched_name": "고양시일산동구",
+    "province": "경기도"
+  },
+  "530039": {
+    "sgg_code": "11710",
+    "cls_nm": "송파구",
+    "cls_fullnm": "서울>강남지역>동남권>송파구",
+    "matched_name": "송파구",
+    "province": "서울특별시"
+  },
+  "520046": {
+    "sgg_code": "41480",
+    "cls_nm": "파주시",
+    "cls_fullnm": "경기>경의권>파주시",
+    "matched_name": "파주시",
+    "province": "경기도"
+  },
+  "530087": {
+    "sgg_code": "41287",
+    "cls_nm": "일산서구",
+    "cls_fullnm": "경기>경의권>고양시>일산서구",
+    "matched_name": "고양시일산서구",
+    "province": "경기도"
+  },
+  "520048": {
+    "sgg_code": "41650",
+    "cls_nm": "포천시",
+    "cls_fullnm": "경기>경원권>포천시",
+    "matched_name": "포천시",
+    "province": "경기도"
+  },
+  "530040": {
+    "sgg_code": "11740",
+    "cls_nm": "강동구",
+    "cls_fullnm": "서울>강남지역>동남권>강동구",
+    "matched_name": "강동구",
+    "province": "서울특별시"
+  },
+  "520049": {
+    "sgg_code": "41250",
+    "cls_nm": "동두천시",
+    "cls_fullnm": "경기>경원권>동두천시",
+    "matched_name": "동두천시",
+    "province": "경기도"
+  },
+  "520050": {
+    "sgg_code": "41630",
+    "cls_nm": "양주시",
+    "cls_fullnm": "경기>경원권>양주시",
+    "matched_name": "양주시",
+    "province": "경기도"
+  },
+  "520051": {
+    "sgg_code": "41150",
+    "cls_nm": "의정부시",
+    "cls_fullnm": "경기>경원권>의정부시",
+    "matched_name": "의정부시",
+    "province": "경기도"
+  }
+}

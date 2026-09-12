@@ -5,6 +5,8 @@ Streamlit + Pandas + NumPy + Plotly
 
 import concurrent.futures
 import difflib
+import json
+import os
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 
@@ -858,6 +860,157 @@ def make_trend_chart(trend_df: pd.DataFrame, apt_name: str, is_mock: bool) -> go
 
 
 # ======================================================================================
+# 한국부동산원 R-ONE 오픈API 연동 — 지역별 아파트 매매가격지수(전국 시세 히트맵 · 상승률 자동추출)
+# ======================================================================================
+REB_API_BASE = "https://www.reb.or.kr/r-one/openapi/SttsApiTblData.do"
+REB_STATBL_ID = "A_2024_00045"  # (월) 매매가격지수_아파트
+REB_INDEX_DATA_START = (2003, 11)  # 이 통계표의 실제 데이터 시작 시점
+_APP_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+def reb_enabled() -> bool:
+    return bool(get_secret("REB_SERVICE_KEY"))
+
+
+@st.cache_resource(show_spinner=False)
+def load_korea_geojson() -> dict:
+    """시군구 경계 GeoJSON (data/korea_sgg.geojson, properties.sggcd=5자리 법정동코드)을 읽는다."""
+    with open(os.path.join(_APP_DIR, "data", "korea_sgg.geojson"), encoding="utf-8") as f:
+        return json.load(f)
+
+
+@st.cache_resource(show_spinner=False)
+def load_reb_region_mapping() -> dict:
+    """R-ONE CLS_ID(지역코드) -> {sgg_code(법정동코드 5자리), cls_nm, cls_fullnm} 매핑.
+    data/reb_cls_to_sgg.json은 R-ONE API 응답의 지역 계층(CLS_FULLNM)을 시군구 경계 데이터의
+    (시도명, 시군구명)과 이름 매칭해 미리 만들어 둔 결과다 (군 단위 상당수는 아파트 재고가 적어
+    R-ONE 지수 자체가 없어 매핑에서 빠진다)."""
+    with open(os.path.join(_APP_DIR, "data", "reb_cls_to_sgg.json"), encoding="utf-8") as f:
+        return json.load(f)
+
+
+@st.cache_resource(show_spinner=False)
+def load_sgg_to_cls_mapping() -> dict:
+    """법정동코드(5자리) -> R-ONE CLS_ID 역방향 매핑 (물건분석 탭의 지역 선택값과 연결할 때 사용)."""
+    return {v["sgg_code"]: cls_id for cls_id, v in load_reb_region_mapping().items()}
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def reb_latest_available_month(service_key: str):
+    """한국부동산원이 실제로 지수를 발표한 가장 최근 월(YYYYMM)을 찾는다 (보통 1~2개월 발표 지연이 있다)."""
+    ym_ts = pd.Timestamp.today().replace(day=1)
+    for _ in range(6):
+        ym = ym_ts.strftime("%Y%m")
+        result = _call_reb_api(service_key, ym)
+        if result["error"] is None and result["rows"]:
+            return ym
+        ym_ts -= pd.DateOffset(months=1)
+    return None
+
+
+def reb_year_month_options(start=REB_INDEX_DATA_START, end=None):
+    """실제 데이터가 존재하는 기간의 YYYYMM 문자열 목록 (오래된 순 -> 최신 순)."""
+    start_ts = pd.Timestamp(year=start[0], month=start[1], day=1)
+    end_ts = pd.Timestamp(year=int(end[:4]), month=int(end[4:]), day=1) if end else pd.Timestamp.today().replace(day=1)
+    return [d.strftime("%Y%m") for d in pd.date_range(start=start_ts, end=end_ts, freq="MS")]
+
+
+@st.cache_data(ttl=3600, show_spinner=False)
+def _call_reb_api(service_key: str, wrttime: str, cls_id: str = "") -> dict:
+    """
+    한국부동산원 R-ONE 오픈API 호출 ((월) 매매가격지수_아파트). 1시간 캐시.
+    반환: {"error": str|None, "rows": [{"CLS_ID":..., "DTA_VAL":...}, ...]}
+    """
+    params = (
+        f"KEY={service_key}&STATBL_ID={REB_STATBL_ID}&DTACYCLE_CD=MM"
+        f"&WRTTIME_IDTFR_ID={wrttime}&Type=json&pIndex=1&pSize=300"
+    )
+    if cls_id:
+        params += f"&CLS_ID={cls_id}"
+    try:
+        resp = requests.get(f"{REB_API_BASE}?{params}", timeout=15)
+        resp.raise_for_status()
+        data = resp.json()
+    except (requests.RequestException, ValueError) as e:
+        return {"error": f"API 요청 실패: {e}", "rows": []}
+
+    if "SttsApiTblData" not in data:
+        result = data.get("RESULT", {})
+        if result.get("CODE") == "INFO-200":
+            return {"error": None, "rows": []}  # 해당 시점에 데이터가 없을 뿐 (정상 케이스)
+        return {"error": f"API 오류: {result.get('MESSAGE', '알 수 없는 오류')}", "rows": []}
+
+    rows = data["SttsApiTblData"][1].get("row", []) if len(data["SttsApiTblData"]) > 1 else []
+    return {"error": None, "rows": rows}
+
+
+def fetch_reb_index_snapshot(wrttime: str):
+    """특정 시점(YYYYMM)의 전 지역 아파트 매매가격지수 스냅샷. 반환: ({cls_id: 지수값}, 에러메시지)"""
+    service_key = get_secret("REB_SERVICE_KEY")
+    if not service_key:
+        return {}, "REB_SERVICE_KEY가 설정되지 않았습니다."
+    result = _call_reb_api(service_key, wrttime)
+    if result["error"]:
+        return {}, result["error"]
+    return {str(r["CLS_ID"]): r["DTA_VAL"] for r in result["rows"] if r.get("DTA_VAL") is not None}, None
+
+
+def fetch_reb_index_value(cls_id: str, wrttime: str):
+    """특정 지역(cls_id) + 시점의 지수값 하나만 조회. 반환: (지수값 또는 None, 에러메시지)"""
+    service_key = get_secret("REB_SERVICE_KEY")
+    if not service_key:
+        return None, "REB_SERVICE_KEY가 설정되지 않았습니다."
+    result = _call_reb_api(service_key, wrttime, cls_id=cls_id)
+    if result["error"]:
+        return None, result["error"]
+    if not result["rows"]:
+        return None, f"{wrttime[:4]}년 {int(wrttime[4:])}월 데이터가 없습니다."
+    return result["rows"][0]["DTA_VAL"], None
+
+
+def compute_cagr_pct(start_val: float, end_val: float, start_ym: str, end_ym: str):
+    """두 지수값 사이의 연평균 변동률(CAGR, %) — '예상 연간 주택가격 상승률' 자동추출에 사용."""
+    if not start_val or start_val <= 0:
+        return None
+    start_dt = pd.Timestamp(year=int(start_ym[:4]), month=int(start_ym[4:]), day=1)
+    end_dt = pd.Timestamp(year=int(end_ym[:4]), month=int(end_ym[4:]), day=1)
+    years = (end_dt - start_dt).days / 365.25
+    if years <= 0:
+        return None
+    return ((end_val / start_val) ** (1 / years) - 1) * 100
+
+
+def make_reb_choropleth(change_pct: dict) -> go.Figure:
+    """지역별 매매가격지수 변동률(%)을 대한민국 지도 위에 색으로 표시하는 choropleth."""
+    geojson = load_korea_geojson()
+    mapping = load_reb_region_mapping()
+
+    sgg_codes, values, names = [], [], []
+    for cls_id, pct in change_pct.items():
+        info = mapping.get(cls_id)
+        if info is None:
+            continue
+        sgg_codes.append(info["sgg_code"])
+        values.append(pct)
+        names.append(info["cls_fullnm"].replace(">", " "))
+
+    bound = max(abs(min(values, default=0)), abs(max(values, default=0)), 0.1)
+    fig = go.Figure(go.Choroplethmap(
+        geojson=geojson, locations=sgg_codes, z=values,
+        featureidkey="properties.sggcd",
+        colorscale="RdBu_r", zmin=-bound, zmax=bound,
+        marker_line_width=0.3, marker_line_color="white",
+        colorbar_title="변동률(%)",
+        text=names, hovertemplate="%{text}<br>변동률: %{z:.2f}%<extra></extra>",
+    ))
+    fig.update_layout(
+        map_style="carto-positron", map_zoom=5.7, map_center={"lat": 36.2, "lon": 127.8},
+        margin=dict(l=0, r=0, t=10, b=0), height=650,
+    )
+    return fig
+
+
+# ======================================================================================
 # 물건(매물) 공유 저장소 — Google Sheets 연동
 # secrets.toml에 [gcp_service_account]와 GSHEET_ID가 설정되어 있으면, 저장/삭제할 때마다
 # Google Sheets에도 함께 기록해 컴퓨터·휴대폰 등 다른 기기에서도 같은 물건 목록을 볼 수 있다.
@@ -1380,7 +1533,7 @@ g_inputs = dict(
 # ======================================================================================
 # 메인 탭 — 물건 분석 / 물건 비교
 # ======================================================================================
-tab_analyze, tab_compare = st.tabs(["🏢 물건 분석", "📊 물건 비교"])
+tab_analyze, tab_compare, tab_heatmap = st.tabs(["🏢 물건 분석", "📊 물건 비교", "🗺️ 시세 히트맵"])
 
 # --------------------------------------------------------------------------------------
 # 탭 1. 물건 분석 — 하나의 물건에 대해 매매·전세·월세를 한 화면에서 동시 비교
@@ -1626,7 +1779,43 @@ with tab_analyze:
             st.markdown("#### 🏠 매매")
             st.number_input("매매가 (만원)", min_value=0, step=1000, key="f_sale_price")
             money_hint(st.session_state.f_sale_price)
+            if "_pending_f_price_growth_rate" in st.session_state:
+                st.session_state.f_price_growth_rate = st.session_state.pop("_pending_f_price_growth_rate")
             st.number_input("예상 연간 주택가격 상승률 (%)", step=0.1, format="%.1f", key="f_price_growth_rate")
+            with st.popover("📈 실제 시세로 자동 추출", use_container_width=True, disabled=not reb_enabled()):
+                if not reb_enabled():
+                    st.caption("⚠️ `REB_SERVICE_KEY`가 설정되지 않아 사용할 수 없습니다.")
+                else:
+                    st.caption("한국부동산원 아파트 매매가격지수로 위에서 선택한 지역의 연평균 상승률(CAGR)을 계산해 채워 넣습니다.")
+                    _ym_options = reb_year_month_options(end=reb_latest_available_month(get_secret("REB_SERVICE_KEY")))
+                    _ym_labels = {ym: f"{ym[:4]}년 {int(ym[4:])}월" for ym in _ym_options}
+                    auto_start_ym = st.selectbox(
+                        "시작 시점", options=_ym_options, index=max(0, len(_ym_options) - 61),
+                        format_func=lambda ym: _ym_labels[ym], key="auto_growth_start_ym",
+                    )
+                    auto_end_ym = st.selectbox(
+                        "종료 시점", options=_ym_options, index=len(_ym_options) - 1,
+                        format_func=lambda ym: _ym_labels[ym], key="auto_growth_end_ym",
+                    )
+                    if st.button("이 지역 지수로 계산해 반영", key="auto_growth_apply"):
+                        auto_cls_id = load_sgg_to_cls_mapping().get(lawd_cd)
+                        if not lawd_cd or not auto_cls_id:
+                            st.warning("이 지역은 한국부동산원 아파트 매매가격지수 데이터가 없습니다 (재고가 적은 군 지역 등). 위에서 지역(시/군/구)을 먼저 선택하세요.")
+                        elif auto_start_ym >= auto_end_ym:
+                            st.warning("시작 시점은 종료 시점보다 이전이어야 합니다.")
+                        else:
+                            auto_start_val, auto_err1 = fetch_reb_index_value(auto_cls_id, auto_start_ym)
+                            auto_end_val, auto_err2 = fetch_reb_index_value(auto_cls_id, auto_end_ym)
+                            if auto_err1 or auto_err2:
+                                st.error(f"조회 실패: {auto_err1 or auto_err2}")
+                            else:
+                                auto_cagr = compute_cagr_pct(auto_start_val, auto_end_val, auto_start_ym, auto_end_ym)
+                                if auto_cagr is None:
+                                    st.warning("연평균 상승률을 계산할 수 없습니다.")
+                                else:
+                                    st.session_state["_pending_f_price_growth_rate"] = round(auto_cagr, 2)
+                                    st.success(f"{_ym_labels[auto_start_ym]} → {_ym_labels[auto_end_ym]} 연평균 {auto_cagr:.2f}%를 반영했습니다.")
+                                    st.rerun()
             st.number_input("주택담보대출 금리 (%)", min_value=0.0, step=0.1, format="%.1f", key="f_mortgage_rate")
             st.selectbox(
                 "대출 상환방식", ["원리금균등상환", "원금균등상환", "만기일시상환"], key="f_repayment_type",
@@ -1972,3 +2161,82 @@ with tab_compare:
                 if st.session_state.selected_property_id in to_delete:
                     st.session_state.pending_select_id = NEW_PROPERTY_ID
                 st.rerun()
+
+# --------------------------------------------------------------------------------------
+# 탭 3. 시세 히트맵 — 한국부동산원 R-ONE 아파트 매매가격지수로 전국 지역별 변동률 시각화
+# --------------------------------------------------------------------------------------
+with tab_heatmap:
+    st.markdown("#### 🗺️ 전국 아파트 매매가격지수 변동률 히트맵")
+    st.caption(
+        "한국부동산원 R-ONE Open API의 '(월) 매매가격지수_아파트'를 사용합니다. "
+        "두 시점을 고르면 그 사이 지역별 지수 변동률(%)을 지도 위에 색으로 표시합니다."
+    )
+
+    if not reb_enabled():
+        st.info(
+            "⚠️ 아직 한국부동산원 API 키가 연동되지 않았습니다. "
+            "`secrets.toml`에 `REB_SERVICE_KEY`를 설정하면 사용할 수 있습니다."
+        )
+    else:
+        ym_options = reb_year_month_options(end=reb_latest_available_month(get_secret("REB_SERVICE_KEY")))
+        ym_labels = {ym: f"{ym[:4]}년 {int(ym[4:])}월" for ym in ym_options}
+
+        hcol1, hcol2, hcol3 = st.columns([1.2, 1.2, 1])
+        with hcol1:
+            start_ym = st.selectbox(
+                "시작 시점", options=ym_options, index=max(0, len(ym_options) - 61),
+                format_func=lambda ym: ym_labels[ym], key="heatmap_start_ym",
+            )
+        with hcol2:
+            end_ym = st.selectbox(
+                "종료 시점", options=ym_options, index=len(ym_options) - 1,
+                format_func=lambda ym: ym_labels[ym], key="heatmap_end_ym",
+            )
+        with hcol3:
+            st.write("")
+            st.write("")
+            run_heatmap = st.button("🔍 조회", use_container_width=True)
+
+        if start_ym >= end_ym:
+            st.warning("시작 시점은 종료 시점보다 이전이어야 합니다.")
+        elif run_heatmap or "heatmap_change_pct" in st.session_state:
+            if run_heatmap:
+                with st.spinner("한국부동산원에서 지역별 지수를 조회하는 중..."):
+                    start_snap, start_err = fetch_reb_index_snapshot(start_ym)
+                    end_snap, end_err = fetch_reb_index_snapshot(end_ym)
+                if start_err or end_err:
+                    st.error(f"조회 실패: {start_err or end_err}")
+                    st.session_state.pop("heatmap_change_pct", None)
+                else:
+                    change_pct = {
+                        cls_id: (end_snap[cls_id] / start_snap[cls_id] - 1) * 100
+                        for cls_id in start_snap.keys() & end_snap.keys()
+                        if start_snap[cls_id]
+                    }
+                    st.session_state.heatmap_change_pct = change_pct
+                    st.session_state.heatmap_change_range = (start_ym, end_ym)
+
+            change_pct = st.session_state.get("heatmap_change_pct")
+            if change_pct:
+                shown_start, shown_end = st.session_state.heatmap_change_range
+                st.caption(f"📅 {ym_labels[shown_start]} → {ym_labels[shown_end]} 아파트 매매가격지수 변동률")
+                fig = make_reb_choropleth(change_pct)
+                st.plotly_chart(fig, use_container_width=True)
+
+                mapping = load_reb_region_mapping()
+                rows = [
+                    {"지역": mapping[cls_id]["cls_fullnm"].replace(">", " "), "변동률(%)": pct}
+                    for cls_id, pct in change_pct.items() if cls_id in mapping
+                ]
+                rank_df = pd.DataFrame(rows).sort_values("변동률(%)", ascending=False)
+                rcol1, rcol2 = st.columns(2)
+                with rcol1:
+                    st.markdown("**📈 상승률 상위 10곳**")
+                    st.dataframe(rank_df.head(10).style.format({"변동률(%)": "{:.2f}"}), hide_index=True, use_container_width=True)
+                with rcol2:
+                    st.markdown("**📉 상승률 하위 10곳**")
+                    st.dataframe(rank_df.tail(10).style.format({"변동률(%)": "{:.2f}"}), hide_index=True, use_container_width=True)
+
+                st.caption(
+                    "※ 아파트 재고가 적은 일부 군(郡) 지역은 한국부동산원이 별도 지수를 산출하지 않아 지도에 표시되지 않습니다."
+                )
