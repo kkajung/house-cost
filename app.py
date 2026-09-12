@@ -948,8 +948,51 @@ def _get_history_worksheet():
     return _get_or_create_worksheet("history", tuple(HISTORY_COLUMNS))
 
 
+def _get_global_settings_worksheet():
+    return _get_or_create_worksheet("settings", tuple(GLOBAL_SETTING_KEYS))
+
+
 def gsheet_enabled() -> bool:
     return _open_gsheet() is not None
+
+
+def load_global_settings_from_gsheet() -> dict:
+    """저장해 둔 '내 공통입력값 기본값'을 단일 행에서 읽어온다. 없으면 빈 dict."""
+    ws = _get_global_settings_worksheet()
+    if ws is None:
+        return {}
+    try:
+        records = ws.get_all_records()
+    except Exception:
+        return {}
+    if not records:
+        return {}
+    row = records[0]
+    result = {}
+    for g_key in GLOBAL_SETTING_KEYS:
+        default_val = DEFAULT_FORM_VALUES[f"g_{g_key}"]
+        cast = int if isinstance(default_val, int) else float
+        try:
+            result[g_key] = cast(row.get(g_key))
+        except (TypeError, ValueError):
+            result[g_key] = default_val
+    return result
+
+
+def save_global_settings_to_gsheet(values: dict) -> None:
+    """현재 공통입력값을 '내 기본값'으로 저장 — 다음 접속·새로고침에도 이 값으로 시작한다."""
+    ws = _get_global_settings_worksheet()
+    if ws is None:
+        return
+    row_values = [str(values.get(g_key, "")) for g_key in GLOBAL_SETTING_KEYS]
+    try:
+        existing = ws.get_all_values()
+        if len(existing) >= 2:
+            ws.update("A2", [row_values])
+        else:
+            ws.append_row(row_values)
+    except Exception:
+        pass
 
 
 def load_properties_from_gsheet() -> dict:
@@ -1224,6 +1267,14 @@ if "properties" not in st.session_state:
     st.session_state.properties = load_properties_from_gsheet() if gsheet_enabled() else {}
 if "selected_property_id" not in st.session_state:
     st.session_state.selected_property_id = NEW_PROPERTY_ID
+
+# 세션 최초 진입 시, 저장해 둔 "내 공통입력값 기본값"이 있으면 하드코딩된 기본값 대신 그것부터 적용한다.
+if "_global_settings_loaded" not in st.session_state:
+    st.session_state._global_settings_loaded = True
+    if gsheet_enabled():
+        for _g_key, _g_val in load_global_settings_from_gsheet().items():
+            st.session_state[f"g_{_g_key}"] = _g_val
+
 for _k, _v in DEFAULT_FORM_VALUES.items():
     st.session_state.setdefault(_k, _v)
 
@@ -1253,7 +1304,10 @@ st.caption("물건별로 매매·전세·월세 조건을 한 화면에서 동�
 
 with st.sidebar:
     st.header("⚙️ 공통 입력값")
-    st.caption("물건을 저장할 때 이 값들도 함께 스냅샷으로 저장되고, 불러오면 그 당시 값으로 복원됩니다.")
+    st.caption(
+        "물건을 저장할 때 이 값들도 함께 스냅샷으로 저장되고, 불러오면 그 당시 값으로 복원됩니다. "
+        "아래 '내 기본값으로 저장' 버튼을 누르면 새로고침·재접속해도 이 값으로 시작합니다."
+    )
     own_capital = st.number_input("보유 자금 (만원)", min_value=0, step=1000, key="g_own_capital")
     money_hint(own_capital)
     target_period = st.number_input("거주 예정 기간 (년)", min_value=0.5, step=0.5, format="%.1f", key="g_target_period")
@@ -1289,6 +1343,17 @@ with st.sidebar:
         holding_tax_rate = st.number_input(
             "보유세 실효세율 (연, % of 매매가)", min_value=0.0, step=0.01, format="%.2f", key="g_holding_tax_rate",
         )
+
+    st.divider()
+    if gsheet_enabled():
+        if st.button("💾 이 공통입력값을 내 기본값으로 저장", use_container_width=True,
+                      help="지금 사이드바에 입력된 값을 '내 기본값'으로 저장합니다. 다음에 접속하거나 새로고침해도 이 값으로 시작합니다."):
+            save_global_settings_to_gsheet({
+                g_key: st.session_state[f"g_{g_key}"] for g_key in GLOBAL_SETTING_KEYS
+            })
+            st.success("저장했습니다. 앞으로 새로고침·재접속해도 이 값으로 시작합니다.")
+    else:
+        st.caption("⚠️ 공유 저장소 미연동 — 공통입력값은 이 브라우저 세션에만 유지되고, 새로고침하면 기본값으로 돌아갑니다.")
 
 g_inputs = dict(
     own_capital=own_capital, target_period=target_period,
