@@ -233,6 +233,40 @@ def total_rent_with_escalation(monthly_rent: float, inflation_rate: float, perio
     return total
 
 
+def calc_mortgage_interest(
+    loan_amount: float, annual_rate_pct: float, loan_term_years: float,
+    holding_period_years: float, repayment_type: str,
+) -> float:
+    """
+    보유(거주) 기간 동안 실제로 부담하는 주택담보대출 이자 총액을 상환방식별로 계산한다.
+    - 만기일시상환: 원금은 그대로 두고 매달 이자만 납부 (원금 불변 → 이자도 매달 동일)
+    - 원금균등상환: 매달 같은 원금을 상환 → 잔액이 선형으로 줄어 이자도 선형으로 감소
+    - 원리금균등상환: 매달 같은 금액(원금+이자)을 납부 → 표준 원리금균등 상환 공식 적용
+    보유기간이 대출 만기보다 길면 만기 시점(대출 완제)까지만 이자가 발생한다.
+    """
+    if loan_amount <= 0 or annual_rate_pct <= 0 or holding_period_years <= 0:
+        return 0.0
+    i = annual_rate_pct / 100 / 12
+    n_total = max(round(loan_term_years * 12), 1)
+    n = min(round(holding_period_years * 12), n_total)
+    if n <= 0:
+        return 0.0
+
+    if repayment_type == "원금균등상환":
+        monthly_principal = loan_amount / n_total
+        # 이자 합 = i × Σ(잔액) = i × (n·L − 월상환원금 × n(n−1)/2)
+        return i * (n * loan_amount - monthly_principal * n * (n - 1) / 2)
+
+    if repayment_type == "원리금균등상환":
+        monthly_payment = loan_amount * i * (1 + i) ** n_total / ((1 + i) ** n_total - 1)
+        remaining = loan_amount * (1 + i) ** n - monthly_payment * ((1 + i) ** n - 1) / i
+        principal_paid = loan_amount - remaining
+        return monthly_payment * n - principal_paid
+
+    # 기본값: 만기일시상환 — 원금이 줄지 않으므로 단리와 동일
+    return loan_amount * i * n
+
+
 # ======================================================================================
 # 시나리오별 Total Net Cost 계산 엔진
 # ======================================================================================
@@ -252,7 +286,10 @@ def calc_purchase(g: dict, p: dict):
     capital_used = min(own_capital, total_needed)
     surplus = max(0.0, own_capital - total_needed)
 
-    loan_interest = loan_amount * p["mortgage_rate"] / 100 * period
+    loan_interest = calc_mortgage_interest(
+        loan_amount, p["mortgage_rate"], p.get("loan_term_years", 30),
+        period, p.get("repayment_type", "원리금균등상환"),
+    )
     holding_tax = p["sale_price"] * g["holding_tax_rate"] / 100 * period  # 보유세(재산세 등) 근사치, 실효세율은 사용자 입력값
     mgmt_fee = g["monthly_mgmt_fee"] * 12 * period
     opp_cost = capital_used * g["opportunity_rate"] / 100 * period
@@ -841,6 +878,7 @@ PROPERTY_COLUMNS = [
     "sale_brokerage_fee", "jeonse_brokerage_fee", "wolse_brokerage_fee",
 ] + GLOBAL_SETTING_KEYS + [
     "sale_brokerage_included", "jeonse_brokerage_included", "wolse_brokerage_included",
+    "repayment_type", "loan_term_years",
 ]
 # 저장할 때마다 한 줄씩 누적되는 이력 로그 (덮어쓰지 않음) — 쌓이면 나만의 가격 추이 그래프가 된다.
 HISTORY_COLUMNS = [
@@ -967,6 +1005,8 @@ def load_properties_from_gsheet() -> dict:
             "sale_brokerage_included": _bool(row.get("sale_brokerage_included"), True),
             "jeonse_brokerage_included": _bool(row.get("jeonse_brokerage_included"), True),
             "wolse_brokerage_included": _bool(row.get("wolse_brokerage_included"), True),
+            "repayment_type": str(row.get("repayment_type") or DEFAULT_FORM_VALUES["f_repayment_type"]),
+            "loan_term_years": _num(row.get("loan_term_years"), int, DEFAULT_FORM_VALUES["f_loan_term_years"]),
         }
         # 옛날 저장분(중개수수료 컬럼이 없던 시절)은 법정 상한 자동계산값으로 채워준다.
         prop = props[pid]
@@ -1114,6 +1154,8 @@ DEFAULT_FORM_VALUES = {
     "f_sale_price": 60000,
     "f_price_growth_rate": 3.0,
     "f_mortgage_rate": 4.0,
+    "f_repayment_type": "원리금균등상환",
+    "f_loan_term_years": 30,
     "f_renovation_cost": 1000,
     "f_sale_brokerage_fee": round(_DEFAULT_SALE_FEE),
     "f_sale_brokerage_included": True,
@@ -1153,6 +1195,8 @@ def load_property_into_form(pid: str):
     st.session_state.f_sale_price = prop["sale_price"]
     st.session_state.f_price_growth_rate = prop["price_growth_rate"]
     st.session_state.f_mortgage_rate = prop["mortgage_rate"]
+    st.session_state.f_repayment_type = prop.get("repayment_type", DEFAULT_FORM_VALUES["f_repayment_type"])
+    st.session_state.f_loan_term_years = prop.get("loan_term_years", DEFAULT_FORM_VALUES["f_loan_term_years"])
     st.session_state.f_renovation_cost = prop["renovation_cost"]
     st.session_state.f_jeonse_deposit = prop["jeonse_deposit"]
     st.session_state.f_jeonse_loan_rate = prop["jeonse_loan_rate"]
@@ -1455,6 +1499,8 @@ with tab_analyze:
                 "sale_price": st.session_state.f_sale_price,
                 "price_growth_rate": st.session_state.f_price_growth_rate,
                 "mortgage_rate": st.session_state.f_mortgage_rate,
+                "repayment_type": st.session_state.f_repayment_type,
+                "loan_term_years": st.session_state.f_loan_term_years,
                 "renovation_cost": st.session_state.f_renovation_cost,
                 "sale_brokerage_fee": st.session_state.f_sale_brokerage_fee,
                 "sale_brokerage_included": st.session_state.f_sale_brokerage_included,
@@ -1502,6 +1548,18 @@ with tab_analyze:
             money_hint(st.session_state.f_sale_price)
             st.number_input("예상 연간 주택가격 상승률 (%)", step=0.1, format="%.1f", key="f_price_growth_rate")
             st.number_input("주택담보대출 금리 (%)", min_value=0.0, step=0.1, format="%.1f", key="f_mortgage_rate")
+            st.selectbox(
+                "대출 상환방식", ["원리금균등상환", "원금균등상환", "만기일시상환"], key="f_repayment_type",
+                help=(
+                    "원리금균등: 매달 같은 금액(원금+이자) 납부. "
+                    "원금균등: 매달 같은 원금 납부, 이자는 점점 감소. "
+                    "만기일시: 매달 이자만 내고 원금은 만기에 한번에 상환."
+                ),
+            )
+            st.number_input(
+                "대출 만기 (년)", min_value=1, max_value=50, step=1, key="f_loan_term_years",
+                help="원리금균등/원금균등상환일 때 매달 상환액·이자 감소 속도를 계산하는 기준이 되는 대출 총 기간입니다.",
+            )
             st.number_input("수리/인테리어비 (만원)", min_value=0, step=100, key="f_renovation_cost")
             money_hint(st.session_state.f_renovation_cost)
             brokerage_fee_control(st.session_state.f_sale_price, "sale", "f_sale_brokerage_fee", "f_sale_brokerage_included")
@@ -1537,6 +1595,8 @@ with tab_analyze:
         sale_price=st.session_state.f_sale_price,
         price_growth_rate=st.session_state.f_price_growth_rate,
         mortgage_rate=st.session_state.f_mortgage_rate,
+        repayment_type=st.session_state.f_repayment_type,
+        loan_term_years=st.session_state.f_loan_term_years,
         renovation_cost=st.session_state.f_renovation_cost,
         brokerage_fee=st.session_state.f_sale_brokerage_fee if st.session_state.f_sale_brokerage_included else 0,
     )
@@ -1639,7 +1699,8 @@ with tab_analyze:
               {acq_threshold2/10000:.1f}억 초과 {acq_rate_max:.1f}% + 지방교육세(취득세율의 {edu_tax_ratio:.1f}%) 가산 (1주택자·전용 85㎡ 이하 단순화 기준).
               정책이 바뀌면 사이드바에서 직접 최신 고시 값으로 수정하세요.
             - **중개보수**: 서울시 공인중개사 법정 상한 요율표 기준 자동 산출
-            - **대출이자**: 부족 자금(필요자금 − 보유자금)에 대해 거주기간 동안 단리로 계산
+            - **대출이자**: 부족 자금(필요자금 − 보유자금)에 대해 계산. 전세/월세 보증금 대출은 만기일시상환(이자만 납부) 단리로 계산하고,
+              매매의 주택담보대출은 선택한 상환방식(원리금균등/원금균등/만기일시)과 대출 만기를 반영해 거주기간 동안 실제로 부담하는 이자만 계산합니다
             - **보유세**: 재산세·종부세 등을 매매가 대비 연 실효세율({holding_tax_rate:.2f}%)로 근사한 값입니다.
               실제로는 공시가격·공정시장가액비율·누진세율이 매년 고시되어 더 복잡하니, 사이드바에서 최신 고시 기준 실효세율로 조정해 사용하세요.
             - **월 관리비**: 아파트마다 다르므로 물건별로 입력하며, '물건 정보'에 입력한 값이 그대로 사용됩니다.
@@ -1683,7 +1744,7 @@ def show_settings_dialog(pid: str, prop: dict, calc_bundle: tuple) -> None:
         fee_note = "" if included else " (미포함 — 계산에서 제외됨)"
         st.write(f"- 매매가: {fmt_money(p_i['sale_price'])}")
         st.write(f"- 예상 연간 상승률: {p_i['price_growth_rate']:.1f}%")
-        st.write(f"- 대출금리: {p_i['mortgage_rate']:.1f}%")
+        st.write(f"- 대출금리: {p_i['mortgage_rate']:.1f}% · 상환방식: {p_i.get('repayment_type', '-')} · 대출만기: {p_i.get('loan_term_years', '-')}년")
         st.write(f"- 수리/인테리어비: {fmt_money(p_i['renovation_cost'])}")
         st.write(f"- 중개료: {fmt_money(prop.get('sale_brokerage_fee', 0))}{fee_note}")
         st.metric("매매 순비용", fmt_money(p_detail["순비용"]))
@@ -1732,6 +1793,8 @@ with tab_compare:
             p_i = dict(
                 sale_price=prop["sale_price"], price_growth_rate=prop["price_growth_rate"],
                 mortgage_rate=prop["mortgage_rate"], renovation_cost=prop["renovation_cost"],
+                repayment_type=prop.get("repayment_type", "원리금균등상환"),
+                loan_term_years=prop.get("loan_term_years", 30),
                 brokerage_fee=prop.get("sale_brokerage_fee") if prop.get("sale_brokerage_included", True) else 0,
             )
             j_i = dict(
