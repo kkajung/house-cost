@@ -6,7 +6,9 @@ Streamlit + Pandas + NumPy + Plotly
 import concurrent.futures
 import difflib
 import xml.etree.ElementTree as ET
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
+KST = timezone(timedelta(hours=9))  # 서버(예: Streamlit Cloud)가 UTC로 돌아도 저장 시각은 항상 한국시간(KST)으로 기록
 
 import numpy as np
 import pandas as pd
@@ -1487,7 +1489,7 @@ with tab_analyze:
                 del st.session_state.properties[prev_id]  # 이름/동 변경 시 기존 항목 정리
                 if gsheet_enabled():
                     delete_property_from_gsheet(prev_id)
-            saved_at = datetime.now().strftime("%Y-%m-%d %H:%M")
+            saved_at = datetime.now(KST).strftime("%Y-%m-%d %H:%M")
             st.session_state.properties[new_pid] = {
                 "name": name,
                 "dong": dong,
