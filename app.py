@@ -872,6 +872,22 @@ def reb_enabled() -> bool:
     return bool(get_secret("REB_SERVICE_KEY"))
 
 
+@st.cache_data(ttl=600, show_spinner=False)
+def reb_is_reachable(service_key: str) -> bool:
+    """한국부동산원(reb.or.kr) 서버에 실제로 연결 가능한지 짧은 타임아웃으로 빠르게 확인한다.
+    Streamlit Community Cloud 등 일부 해외 호스팅 환경은 이 서버가 방화벽에서 막혀 있어
+    (TCP 연결 자체가 timeout) 매번 최대 90초씩 멈추는 대신, 여기서 3초만 기다려보고
+    실패하면 이 세션에서는 10분간 재시도하지 않고 바로 안내 문구를 보여준다."""
+    try:
+        requests.get(
+            f"{REB_API_BASE}?KEY={service_key}&STATBL_ID={REB_STATBL_ID}&Type=json&pSize=1",
+            timeout=3,
+        )
+        return True
+    except requests.RequestException:
+        return False
+
+
 @st.cache_resource(show_spinner=False)
 def load_korea_geojson() -> dict:
     """시군구 경계 GeoJSON (data/korea_sgg.geojson, properties.sggcd=5자리 법정동코드)을 읽는다."""
@@ -1782,9 +1798,13 @@ with tab_analyze:
             if "_pending_f_price_growth_rate" in st.session_state:
                 st.session_state.f_price_growth_rate = st.session_state.pop("_pending_f_price_growth_rate")
             st.number_input("예상 연간 주택가격 상승률 (%)", step=0.1, format="%.1f", key="f_price_growth_rate")
-            with st.popover("📈 실제 시세로 자동 추출", use_container_width=True, disabled=not reb_enabled()):
-                if not reb_enabled():
+            _reb_key = get_secret("REB_SERVICE_KEY")
+            _reb_ready = bool(_reb_key) and reb_is_reachable(_reb_key)
+            with st.popover("📈 실제 시세로 자동 추출", use_container_width=True):
+                if not _reb_key:
                     st.caption("⚠️ `REB_SERVICE_KEY`가 설정되지 않아 사용할 수 없습니다.")
+                elif not _reb_ready:
+                    st.caption("⚠️ 이 기능은 한국부동산원 서버 접속 제한으로 로컬 PC에서 직접 실행할 때만 사용할 수 있습니다.")
                 else:
                     st.caption("한국부동산원 아파트 매매가격지수로 위에서 선택한 지역의 연평균 상승률(CAGR)을 계산해 채워 넣습니다.")
                     _ym_options = reb_year_month_options(end=reb_latest_available_month(get_secret("REB_SERVICE_KEY")))
@@ -2172,13 +2192,19 @@ with tab_heatmap:
         "두 시점을 고르면 그 사이 지역별 지수 변동률(%)을 지도 위에 색으로 표시합니다."
     )
 
-    if not reb_enabled():
+    _reb_key = get_secret("REB_SERVICE_KEY")
+    if not _reb_key:
         st.info(
             "⚠️ 아직 한국부동산원 API 키가 연동되지 않았습니다. "
             "`secrets.toml`에 `REB_SERVICE_KEY`를 설정하면 사용할 수 있습니다."
         )
+    elif not reb_is_reachable(_reb_key):
+        st.warning(
+            "⚠️ 이 기능은 한국부동산원(reb.or.kr) 서버 접속 제한으로 온라인에 배포된 환경에서는 사용할 수 없고, "
+            "로컬 PC에서 `streamlit run app.py`로 직접 실행할 때만 사용할 수 있습니다."
+        )
     else:
-        ym_options = reb_year_month_options(end=reb_latest_available_month(get_secret("REB_SERVICE_KEY")))
+        ym_options = reb_year_month_options(end=reb_latest_available_month(_reb_key))
         ym_labels = {ym: f"{ym[:4]}년 {int(ym[4:])}월" for ym in ym_options}
 
         hcol1, hcol2, hcol3 = st.columns([1.2, 1.2, 1])
