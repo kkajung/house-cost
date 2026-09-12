@@ -292,7 +292,9 @@ def calc_purchase(g: dict, p: dict):
         loan_amount, p["mortgage_rate"], p.get("loan_term_years", 30),
         period, p.get("repayment_type", "원리금균등상환"),
     )
-    holding_tax = p["sale_price"] * g["holding_tax_rate"] / 100 * period  # 보유세(재산세 등) 근사치, 실효세율은 사용자 입력값
+    # 보유세(재산세·종부세 등) = 매매가 × 공시가격 현실화율 × 보유세율(공시가격 기준) × 보유기간
+    # 매매가에 실효세율을 바로 곱하면 공시가격/매매가 괴리가 반영되지 않아 매매 옵션이 불리하게 왜곡되므로 두 요소로 분리한다.
+    holding_tax = p["sale_price"] * g["gongsi_realization_ratio"] / 100 * g["holding_tax_rate"] / 100 * period
     mgmt_fee = g["monthly_mgmt_fee"] * 12 * period
     opp_cost = capital_used * g["opportunity_rate"] / 100 * period
     surplus_gain = surplus * g["opportunity_rate"] / 100 * period
@@ -869,6 +871,8 @@ GLOBAL_SETTING_KEYS = [
     "own_capital", "target_period", "opportunity_rate", "inflation_rate",
     "moving_cost", "cleaning_cost", "acq_threshold1", "acq_threshold2",
     "acq_rate_min", "acq_rate_max", "edu_tax_ratio", "holding_tax_rate",
+    # 아래는 나중에 추가된 키 — 항상 끝에 붙여야 기존 시트의 위치 기반 업데이트가 안 깨진다.
+    "gongsi_realization_ratio",
 ]
 
 PROPERTY_COLUMNS = [
@@ -1188,7 +1192,8 @@ DEFAULT_FORM_VALUES = {
     "g_acq_rate_min": 1.0,
     "g_acq_rate_max": 3.0,
     "g_edu_tax_ratio": 10.0,
-    "g_holding_tax_rate": 0.15,
+    "g_holding_tax_rate": 0.21,
+    "g_gongsi_realization_ratio": 70.0,
     "f_apt_name": "",
     "f_dong": "",
     "f_region_label": "서울특별시 강남구",
@@ -1335,13 +1340,20 @@ with st.sidebar:
         acq_rate_max = st.number_input("최고 취득세율 (%, 2구간 초과)", min_value=0.0, step=0.1, format="%.1f", key="g_acq_rate_max")
         edu_tax_ratio = st.number_input("지방교육세율 (취득세율 대비 %)", min_value=0.0, step=1.0, format="%.1f", key="g_edu_tax_ratio")
 
-        st.markdown("**보유세(재산세·종합부동산세 등) 근사 실효세율**")
+        st.markdown("**보유세(재산세·종합부동산세 등) 근사 — 공시가격 기준**")
         st.caption(
-            "재산세·종부세는 공시가격·공정시장가액비율·누진세율이 매년 고시되어 정확한 계산이 복잡하므로, "
-            "매매가 대비 연간 실효세율(%) 하나로 근사합니다. 최신 고시 공정시장가액비율·세율을 반영해 조정하세요."
+            "재산세·종부세는 매매가가 아니라 '공시가격'에 매겨집니다. 매매가에 실효세율을 바로 곱하면 "
+            "공시가격과 매매가의 괴리가 무시되어 매매 옵션이 불리하게 과대평가될 수 있으므로, "
+            "① 공시가격 현실화율과 ② 공시가격 기준 실효세율을 나눠서 입력합니다."
+        )
+        gongsi_realization_ratio = st.number_input(
+            "공시가격 현실화율 (%, 공시가격 ÷ 매매가)", min_value=0.0, max_value=100.0, step=1.0, format="%.1f",
+            key="g_gongsi_realization_ratio",
+            help="국토교통부가 매년 발표하는 유형별 현실화율(공시가격/시세). 아파트는 통상 65~80% 수준이며, 물건 소재지·연도별 발표치로 조정하세요.",
         )
         holding_tax_rate = st.number_input(
-            "보유세 실효세율 (연, % of 매매가)", min_value=0.0, step=0.01, format="%.2f", key="g_holding_tax_rate",
+            "보유세율 (연, % of 공시가격)", min_value=0.0, step=0.01, format="%.2f", key="g_holding_tax_rate",
+            help="공시가격 기준 재산세+종합부동산세 실효세율. 공정시장가액비율·누진세율까지 반영된 최신 고시 실효세율로 조정하세요.",
         )
 
     st.divider()
@@ -1362,6 +1374,7 @@ g_inputs = dict(
     acq_threshold1=acq_threshold1, acq_threshold2=acq_threshold2,
     acq_rate_min=acq_rate_min, acq_rate_max=acq_rate_max,
     edu_tax_ratio=edu_tax_ratio, holding_tax_rate=holding_tax_rate,
+    gongsi_realization_ratio=gongsi_realization_ratio,
 )
 
 # ======================================================================================
@@ -1768,8 +1781,9 @@ with tab_analyze:
             - **중개보수**: 서울시 공인중개사 법정 상한 요율표 기준 자동 산출
             - **대출이자**: 부족 자금(필요자금 − 보유자금)에 대해 계산. 전세/월세 보증금 대출은 만기일시상환(이자만 납부) 단리로 계산하고,
               매매의 주택담보대출은 선택한 상환방식(원리금균등/원금균등/만기일시)과 대출 만기를 반영해 거주기간 동안 실제로 부담하는 이자만 계산합니다
-            - **보유세**: 재산세·종부세 등을 매매가 대비 연 실효세율({holding_tax_rate:.2f}%)로 근사한 값입니다.
-              실제로는 공시가격·공정시장가액비율·누진세율이 매년 고시되어 더 복잡하니, 사이드바에서 최신 고시 기준 실효세율로 조정해 사용하세요.
+            - **보유세**: 재산세·종부세는 매매가가 아니라 공시가격에 매겨지므로,
+              매매가 × 공시가격 현실화율({gongsi_realization_ratio:.1f}%) × 보유세율({holding_tax_rate:.2f}%, 공시가격 기준) × 보유기간으로 근사합니다.
+              실제로는 공정시장가액비율·누진세율까지 매년 고시되어 더 복잡하니, 사이드바에서 최신 고시 값으로 조정해 사용하세요.
             - **월 관리비**: 아파트마다 다르므로 물건별로 입력하며, '물건 정보'에 입력한 값이 그대로 사용됩니다.
             - **월세 상승**: 물가상승률을 매년 복리로 반영하여 총 월세 지출액 산출
             - **기회비용**: 각 옵션에 실제 투입된 자기자본에 대해서만 산정하며, 여유자금은 별도 운용수익으로 차감
@@ -1802,7 +1816,8 @@ def show_settings_dialog(pid: str, prop: dict, calc_bundle: tuple) -> None:
         st.write(f"- 취득세 구간: {g_calc['acq_threshold1']/10000:.1f}억 / {g_calc['acq_threshold2']/10000:.1f}억")
         st.write(f"- 취득세율: {g_calc['acq_rate_min']:.1f}% ~ {g_calc['acq_rate_max']:.1f}%")
         st.write(f"- 지방교육세율: {g_calc['edu_tax_ratio']:.1f}%")
-        st.write(f"- 보유세 실효세율: {g_calc['holding_tax_rate']:.2f}%")
+        st.write(f"- 공시가격 현실화율: {g_calc['gongsi_realization_ratio']:.1f}%")
+        st.write(f"- 보유세율(공시가격 기준): {g_calc['holding_tax_rate']:.2f}%")
 
     st.divider()
     dtab_s, dtab_j, dtab_w = st.tabs(["🏠 매매", "🏢 전세", "🔑 월세"])
