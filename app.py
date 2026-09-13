@@ -1064,7 +1064,7 @@ HISTORY_COLUMNS = [
 _GSHEET_DEBUG = {"error": None}  # 마지막 연결 실패 사유를 UI에 노출해 진단을 돕는다 (민감정보 아님)
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(ttl=300, show_spinner=False)
 def _open_gsheet():
     """서비스 계정으로 스프레드시트 자체를 연다 (properties/history 워크시트가 여기서 파생됨)."""
     sa_info = get_secret("gcp_service_account")
@@ -1086,7 +1086,7 @@ def _open_gsheet():
         return None
 
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(ttl=300, show_spinner=False)
 def _get_or_create_worksheet(sheet_name: str, columns: tuple):
     sh = _open_gsheet()
     if sh is None:
