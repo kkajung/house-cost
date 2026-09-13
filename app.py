@@ -1061,7 +1061,11 @@ HISTORY_COLUMNS = [
     "sale_price", "price_growth_rate", "mortgage_rate",
     "jeonse_deposit", "jeonse_loan_rate", "wolse_deposit", "wolse_monthly", "wolse_loan_rate",
 ]
-_GSHEET_DEBUG = {"error": None}  # 마지막 연결 실패 사유를 UI에 노출해 진단을 돕는다 (민감정보 아님)
+if "_GSHEET_DEBUG" not in globals():
+    # 마지막 연결 실패 사유를 UI에 노출해 진단을 돕는다 (민감정보 아님).
+    # 캐시된 _open_gsheet()는 재실행 시 함수 본문을 다시 실행하지 않으므로, 매 스크립트
+    # 재실행마다 이 값을 초기화해버리면 실제 에러가 있어도 화면에는 항상 빈 값만 보인다.
+    _GSHEET_DEBUG = {"error": None}
 
 
 @st.cache_resource(ttl=300, show_spinner=False)
