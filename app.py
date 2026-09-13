@@ -3,6 +3,7 @@
 Streamlit + Pandas + NumPy + Plotly
 """
 
+import base64
 import concurrent.futures
 import difflib
 import json
@@ -1068,19 +1069,36 @@ if "_GSHEET_DEBUG" not in globals():
     _GSHEET_DEBUG = {"error": None}
 
 
+def _resolve_gcp_service_account():
+    """서비스 계정 정보를 가져온다. GCP_SERVICE_ACCOUNT_B64(한 줄짜리 base64 JSON, 권장) 우선,
+    없으면 예전 방식인 [gcp_service_account] TOML 테이블로 대체한다.
+    private_key처럼 개행이 많은 값은 Streamlit Cloud Secrets 편집창에 여러 줄로 붙여넣다가
+    따옴표·개행이 깨지는 사고가 잦아, 깨질 여지가 없는 한 줄 base64 형태를 우선 지원한다."""
+    b64 = get_secret("GCP_SERVICE_ACCOUNT_B64")
+    if b64:
+        try:
+            return json.loads(base64.b64decode(b64.strip()).decode("utf-8"))
+        except Exception as e:
+            _GSHEET_DEBUG["error"] = f"GCP_SERVICE_ACCOUNT_B64 디코딩 실패: {type(e).__name__}: {e}"
+            return None
+    sa_info = get_secret("gcp_service_account")
+    return dict(sa_info) if sa_info else None
+
+
 @st.cache_resource(ttl=300, show_spinner=False)
 def _open_gsheet():
     """서비스 계정으로 스프레드시트 자체를 연다 (properties/history 워크시트가 여기서 파생됨)."""
-    sa_info = get_secret("gcp_service_account")
+    sa_info = _resolve_gcp_service_account()
     sheet_id = get_secret("GSHEET_ID")
     if not sa_info or not sheet_id:
-        _GSHEET_DEBUG["error"] = "GSHEET_ID 또는 [gcp_service_account] 시크릿이 비어 있습니다."
+        if not _GSHEET_DEBUG.get("error"):
+            _GSHEET_DEBUG["error"] = "GSHEET_ID 또는 서비스 계정(GCP_SERVICE_ACCOUNT_B64/[gcp_service_account]) 시크릿이 비어 있습니다."
         return None
     try:
         import gspread
         from google.oauth2.service_account import Credentials
 
-        creds = Credentials.from_service_account_info(dict(sa_info), scopes=GSHEET_SCOPES)
+        creds = Credentials.from_service_account_info(sa_info, scopes=GSHEET_SCOPES)
         client = gspread.authorize(creds)
         sh = client.open_by_key(sheet_id)
         _GSHEET_DEBUG["error"] = None
